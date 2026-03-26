@@ -203,6 +203,7 @@
       <label style="cursor:pointer"><input type="checkbox" id="fltBM" style="margin-right:2px"> Build Matrix only</label>
     </span>
     <button class="btn-export" id="btnExport">📥 Export Excel</button>
+    <button class="btn-export" id="btnExportCSV" style="background:#ff9800;">📥 Export CSV</button>
     <button class="btn-export" id="btnExportPDF" style="background:#5c6bc0;">📄 Export PDF</button>
   </div>
   <div class="showing-text" id="showingText"></div>
@@ -861,37 +862,56 @@ document.getElementById('fltBM').addEventListener('change', render);
 
 // Export dialog
 function showExportDialog(callback) {
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
   const box = document.createElement('div');
-  box.style.cssText = 'background:#fff;border-radius:10px;padding:1.5rem;min-width:320px;box-shadow:0 8px 30px rgba(0,0,0,.2);';
+  box.style.cssText = 'background:#fff;border-radius:10px;padding:1.5rem;min-width:340px;box-shadow:0 8px 30px rgba(0,0,0,.2);';
+  const fieldStyle = 'width:100%;padding:.35rem .6rem;border:1px solid #ccc;border-radius:6px;font-size:.8rem;margin-bottom:.6rem;';
+  const lblStyle = 'font-size:.75rem;font-weight:600;color:#555;display:block;margin-bottom:.2rem;';
   box.innerHTML = `
     <div style="font-weight:700;font-size:.95rem;margin-bottom:1rem;color:#1a1a2e;">📥 Export Report</div>
-    <label style="font-size:.78rem;font-weight:600;color:#555;display:block;margin-bottom:.3rem;">File Name</label>
-    <input type="text" id="dlgFileName" style="width:100%;padding:.4rem .6rem;border:1px solid #ccc;border-radius:6px;font-size:.8rem;margin-bottom:.8rem;" value="BOM_Compare_${activeCM}_${new Date().toISOString().slice(0,10)}">
-    <label style="font-size:.78rem;font-weight:600;color:#555;display:block;margin-bottom:.3rem;">Checked by</label>
-    <input type="text" id="dlgChecker" style="width:100%;padding:.4rem .6rem;border:1px solid #ccc;border-radius:6px;font-size:.8rem;margin-bottom:1rem;" placeholder="Enter your name...">
+    <label style="${lblStyle}">Product</label>
+    <input type="text" id="dlgProduct" style="${fieldStyle}" placeholder="e.g. Dejavu P1">
+    <label style="${lblStyle}">Phase</label>
+    <input type="text" id="dlgPhase" style="${fieldStyle}" placeholder="e.g. DVT, PVT">
+    <label style="${lblStyle}">Config</label>
+    <input type="text" id="dlgConfig" style="${fieldStyle}" placeholder="e.g. MLB">
+    <label style="${lblStyle}">Checked by</label>
+    <input type="text" id="dlgChecker" style="${fieldStyle}" placeholder="Enter your name...">
+    <div style="font-size:.7rem;color:#888;margin-bottom:.8rem;">File name: <span id="dlgPreview" style="color:#5c6bc0;font-weight:600;"></span></div>
     <div style="display:flex;gap:.5rem;justify-content:flex-end;">
       <button id="dlgCancel" style="padding:.4rem 1rem;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:.8rem;">Cancel</button>
       <button id="dlgOk" style="padding:.4rem 1.2rem;border:none;border-radius:6px;background:#5c6bc0;color:#fff;cursor:pointer;font-size:.8rem;font-weight:600;">Export</button>
     </div>`;
   overlay.appendChild(box);
   document.body.appendChild(overlay);
-  const fnInput = box.querySelector('#dlgFileName');
-  const ckInput = box.querySelector('#dlgChecker');
-  fnInput.focus(); fnInput.select();
+
+  const updatePreview = () => {
+    const parts = [box.querySelector('#dlgProduct').value.trim(), box.querySelector('#dlgPhase').value.trim(), box.querySelector('#dlgConfig').value.trim(), 'SMT_BOM_Compare', cmName, date].filter(Boolean);
+    box.querySelector('#dlgPreview').textContent = parts.join('_');
+  };
+  ['dlgProduct','dlgPhase','dlgConfig'].forEach(id => box.querySelector('#'+id).addEventListener('input', updatePreview));
+  updatePreview();
+  box.querySelector('#dlgProduct').focus();
+
   box.querySelector('#dlgCancel').onclick = () => { document.body.removeChild(overlay); };
   box.querySelector('#dlgOk').onclick = () => {
-    const fn = fnInput.value.trim() || 'BOM_Compare';
-    const ck = ckInput.value.trim();
+    const product = box.querySelector('#dlgProduct').value.trim();
+    const phase = box.querySelector('#dlgPhase').value.trim();
+    const config = box.querySelector('#dlgConfig').value.trim();
+    const checker = box.querySelector('#dlgChecker').value.trim();
+    const parts = [product, phase, config, 'SMT_BOM_Compare', cmName, date].filter(Boolean);
+    const fileName = parts.join('_');
     document.body.removeChild(overlay);
-    callback(fn, ck);
+    callback(fileName, checker, { product, phase, config });
   };
 }
 
 // Export Excel (HTML table with colors — opens in Excel)
 document.getElementById('btnExport').addEventListener('click', () => {
-  showExportDialog((fileName, checker) => {
+  showExportDialog((fileName, checker, meta) => {
   const filtered = getFiltered();
   const hasBM = !!bmData;
   const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
@@ -902,8 +922,13 @@ document.getElementById('btnExport').addEventListener('click', () => {
   let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>BOM Compare</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
 <style>td,th{font-family:Arial;font-size:8pt;border:1px solid #ccc;padding:2px 4px;} th{font-weight:700;font-size:7pt;} .he{background:#e3f2fd;color:#1565c0;} .hc{background:#fce4ec;color:#c62828;} .hr{background:#f3e5f5;color:#6a1b9a;} .pass{color:#388e3c;font-weight:700;} .fail{color:#c62828;font-weight:700;} .rp{background:#e8f5e9;color:#2e7d32;font-weight:700;text-align:center;} .rf{background:#ffebee;color:#c62828;font-weight:700;text-align:center;} .na{color:#999;}</style></head><body>`;
-  if (checker) html += `<p style="font-size:9pt;"><b>${esc(fileName)}</b> | CM: ${cmName} | Date: ${date} | Checked by: ${esc(checker)} | eero — PQE | Rev: 0A</p>`;
-  else html += `<p style="font-size:9pt;"><b>${esc(fileName)}</b> | CM: ${cmName} | Date: ${date} | eero — PQE | Rev: 0A</p>`;
+  const metaParts = ['CM: ' + cmName, 'Date: ' + date];
+  if (meta.product) metaParts.unshift('Product: ' + esc(meta.product));
+  if (meta.phase) metaParts.push('Phase: ' + esc(meta.phase));
+  if (meta.config) metaParts.push('Config: ' + esc(meta.config));
+  if (checker) metaParts.push('Checked by: ' + esc(checker));
+  metaParts.push('eero — PQE');
+  html += `<p style="font-size:9pt;"><b>${esc(fileName)}</b> | ${metaParts.join(' | ')}</p>`;
 
   html += `<table><thead><tr><th>#</th><th class="he">eero P/N</th><th class="he">eero Rev</th><th class="hc">CM Rev</th><th class="hr">Rev</th><th class="he">eero Item Name</th><th class="hc">CM Item Name</th><th class="hr">Item Name</th><th class="he">eero Qty</th><th class="hc">CM Qty</th><th class="hr">Qty</th><th class="he">eero Mfr</th><th class="hc">CM Vendor</th><th class="hr">Vendor</th><th class="he">eero MPN</th><th class="hc">CM MPN</th><th class="hr">MPN</th><th class="hr">Location</th><th class="hr">Loc Diff</th><th class="he">eero Status</th><th class="hc">CM Status</th><th class="hr">Status</th>`;
   if (hasBM) html += `<th class="hr">BM</th><th class="hr">BM Result</th>`;
@@ -948,9 +973,65 @@ document.getElementById('btnExport').addEventListener('click', () => {
   });
 });
 
+// Export CSV
+document.getElementById('btnExportCSV').addEventListener('click', () => {
+  showExportDialog((fileName, checker, meta) => {
+  const filtered = getFiltered();
+  const hasBM = !!bmData;
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
+  const h = ['#','eero P/N','eero Rev','CM Rev','Rev Result','eero Item Name','CM Item Name','Item Name Result',
+    'eero Qty','CM Qty','Qty Result','eero Mfr','CM Vendor','Vendor Result','eero MPN','CM MPN','MPN Result',
+    'Location','Location Diff','eero Status','CM Status','Status Result'];
+  if (hasBM) h.push('Build Matrix','BM Result');
+  h.push('Comparison Result','eero Comment');
+  const rows = filtered.map(r => {
+    const ck=r.checks, e=r.eero||{}, c=r.cm||{};
+    if (r.overall.includes('Missing')) {
+      const missCM = r.overall === 'Missing in CM';
+      if (missCM && e) {
+        const srcMfr = e.sources && e.sources.length > 0 ? e.sources[0].mfr : '';
+        const srcMPN = e.sources && e.sources.length > 0 ? e.sources[0].mpn : '';
+        const row = [r.idx, r.eeroPN, e.revision||'','N/A','Mismatch', e.partName||'','N/A','Mismatch', e.qty||'','N/A','Mismatch',
+          srcMfr||'N/A','N/A','Mismatch', srcMPN||'N/A','N/A','Mismatch', 'N/A','','N/A','N/A','Mismatch'];
+        if (hasBM) row.push('','');
+        row.push('FAIL', r.comment||''); return row;
+      } else {
+        const row = [r.idx, r.eeroPN, 'N/A',c.rev||'','Mismatch', 'N/A',c.itemName||'','Mismatch', 'N/A',c.qty||'','Mismatch',
+          'N/A',c.vendor||'','Mismatch', 'N/A',c.vendorPN||'','Mismatch', 'N/A','','N/A',c.arenaStatus||'','Mismatch'];
+        if (hasBM) row.push('','');
+        row.push('FAIL', r.comment||''); return row;
+      }
+    }
+    const row = [r.idx, r.eeroPN,
+      ck.rev?.eero, ck.rev?.cm, ck.rev?.match?'Match':'Mismatch',
+      ck.itemName?.eero, ck.itemName?.cm, ck.itemName?.match?'Match':'Mismatch',
+      ck.qty?.eero, ck.qty?.cm, ck.qty?.match?'Match':'Mismatch',
+      ck.eeroMfr||'', c.vendor, ck.vendor?.match?'Match':'Mismatch',
+      ck.eeroMPN||'', c.vendorPN, ck.mpnInSources?.match?'Match':'Mismatch',
+      ck.location?.match?'PASS':'FAIL', ck.location?.diff||'',
+      ck.status?.eero||'', c.arenaStatus||'', ck.status?.match?'Match':'Mismatch'];
+    if (hasBM) row.push(ck.bmInMatrix?'✓':'', ck.bmResult==='FAIL'?'FAIL: '+(ck.bmDetail||''):(ck.bmResult||'—'));
+    row.push(r.overall, r.comment||'');
+    return row;
+  });
+  const metaParts = ['CM: ' + cmName, 'Date: ' + date];
+  if (meta.product) metaParts.unshift('Product: ' + meta.product);
+  if (meta.phase) metaParts.push('Phase: ' + meta.phase);
+  if (meta.config) metaParts.push('Config: ' + meta.config);
+  if (checker) metaParts.push('Checked by: ' + checker);
+  metaParts.push('eero — PQE');
+  const metaLine = `"${metaParts.join(' | ')}"`;
+  const csv = [metaLine, h.map(c=>`"${c}"`).join(','), ...rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = fileName + '.csv'; a.click();
+  });
+});
+
 // Export PDF
 document.getElementById('btnExportPDF').addEventListener('click', () => {
-  showExportDialog((fileName, checker) => {
+  showExportDialog((fileName, checker, meta) => {
   const filtered = getFiltered();
   const hasBM = !!bmData;
   const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
@@ -980,7 +1061,7 @@ document.getElementById('btnExportPDF').addEventListener('click', () => {
   .miss { color: #c62828; font-weight: 600; }
 </style></head><body>
 <h2>${fileName}</h2>
-<div class="meta">CM: ${cmName} &nbsp;|&nbsp; Date: ${date} &nbsp;|&nbsp; eero — PQE${checker ? ' &nbsp;|&nbsp; Checked by: '+checker : ''} &nbsp;|&nbsp; Rev: 0A</div>`);
+<div class="meta">${meta.product?'Product: '+meta.product+' &nbsp;|&nbsp; ':''}CM: ${cmName} &nbsp;|&nbsp; Date: ${date}${meta.phase?' &nbsp;|&nbsp; Phase: '+meta.phase:''}${meta.config?' &nbsp;|&nbsp; Config: '+meta.config:''}${checker?' &nbsp;|&nbsp; Checked by: '+checker:''} &nbsp;|&nbsp; eero — PQE</div>`);
 
   const total = comparisonResults.length;
   const pass = comparisonResults.filter(r=>r.overall==='PASS').length;

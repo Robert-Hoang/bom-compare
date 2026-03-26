@@ -962,7 +962,7 @@ document.getElementById('btnExport').addEventListener('click', () => {
     html += `<td>${ck.status?.match?esc(ck.status?.cm||''):'<span class="fail">'+esc(ck.status?.cm||'N/A')+'</span>'}</td>`;
     html += `<td>${pf(ck.status?.match)}</td>`;
     html += bmCells;
-    html += `<td class="${r.overall==='PASS'?'rp':'rf'}">${r.overall}${ck.missingMPN?' (MPN Missing)':''}</td>`;
+    html += `<td class="${r.overall==='PASS'?'rp':'rf'}">${r.overall}${ck.missingMPN?' (MPN Missing in CM)':''}</td>`;
     html += `<td>${esc(r.comment||'')}</td></tr>`;
   }
   html += '</tbody></table></body></html>';
@@ -1132,7 +1132,7 @@ document.getElementById('btnExportPDF').addEventListener('click', () => {
       <td>${ck.status?.match?esc(ck.status?.cm||''):'<span class="fail">'+esc(ck.status?.cm||'N/A')+'</span>'}</td>
       <td>${pf(ck.status?.match)}</td>
       ${bmCells}
-      <td class="${r.overall==='PASS'?'rp':'rf'}">${r.overall}</td>
+      <td class="${r.overall==='PASS'?'rp':'rf'}">${r.overall}${ck.missingMPN?' (MPN Missing in CM)':''}</td>
       <td>${esc(r.comment||'')}</td>
     </tr>`);
   }

@@ -1,0 +1,1484 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMT BOM Comparison Tool</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f6f9; color: #333; min-height: 100vh; }
+
+  /* Sticky header */
+  .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; padding: .8rem 2rem; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header h1 { font-size: 1.2rem; font-weight: 700; }
+  .header .brand { font-size: 1rem; font-weight: 700; opacity: .85; }
+  .main { max-width: 1800px; margin: 0 auto; padding: 1rem 1.5rem; }
+
+  /* Column layout */
+  /* Layout: sidebar + 3-col upload */
+  .upload-layout { display: flex; gap: .8rem; margin-bottom: 1rem; }
+  .cm-sidebar { display: flex; flex-direction: column; gap: .4rem; min-width: 140px; }
+  .cm-btn { border-radius: 8px; padding: .5rem .7rem; cursor: pointer; transition: all .2s; border: 2px solid transparent; }
+  .cm-btn .cm-name { font-weight: 700; font-size: .82rem; color: #1a1a2e; }
+  .cm-btn .cm-status { font-size: .58rem; color: #4caf50; }
+  .cm-btn.cm-luxshare { background: #e3f2fd; }
+  .cm-btn.cm-pegatron { background: #fce4ec; }
+  .cm-btn.cm-ambit { background: #e8f5e9; }
+  .cm-btn.active { border-color: #1a1a2e; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .cm-btn:hover { opacity: .85; }
+
+  .upload-area { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .8rem; align-items: start; background: #fff; border-radius: 10px; padding: .8rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); transition: border-color .3s; border-left: 4px solid #5c6bc0; }
+  .upload-area.theme-luxshare { border-left-color: #1565c0; }
+  .upload-area.theme-pegatron { border-left-color: #c62828; }
+  .upload-area.theme-ambit { border-left-color: #2e7d32; }
+  .upload-col-title { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; margin-bottom: .5rem; }
+
+  .upload-box { background: #f8f9ff; border: 2px dashed #d0d5e0; border-radius: 8px; padding: .5rem; text-align: center; cursor: pointer; transition: all .2s; position: relative; margin-bottom: .4rem; }
+  .upload-box:hover { border-color: #7c8cf5; background: #eef0ff; }
+  .upload-box.loaded { border-color: #4caf50; border-style: solid; background: #f0faf0; }
+  .upload-box .icon { font-size: 1.1rem; margin-bottom: .1rem; }
+  .upload-box .label { font-weight: 700; font-size: .72rem; color: #1a1a2e; }
+  .upload-box .sub { font-size: .56rem; color: #888; margin-top: .1rem; }
+  .upload-box .file-name { font-size: .56rem; color: #2e7d32; font-weight: 600; margin-top: .15rem; word-break: break-all; }
+  .upload-box input[type="file"] { display: none; }
+  .btn-remove { position: absolute; top: 3px; right: 5px; background: #e53935; color: #fff; border: none; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; line-height: 16px; cursor: pointer; display: none; padding: 0; }
+  .upload-box.loaded .btn-remove { display: block; }
+
+  .cm-upload-panel { display: none; }
+  .cm-upload-panel.active { display: contents; }
+  .cm-bom-panel { display: none; }
+  .cm-bom-panel.active { display: block; }
+
+  .btn-compare-col { display: block; width: 100%; margin-top: .4rem; padding: .45rem; border: none; border-radius: 8px; font-size: .76rem; font-weight: 700; cursor: pointer; color: #fff; transition: all .2s; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .btn-compare-col:disabled { opacity: .3; cursor: not-allowed; box-shadow: none; }
+  .btn-compare-col.theme-luxshare { background: linear-gradient(135deg, #1565c0, #42a5f5); }
+  .btn-compare-col.theme-pegatron { background: linear-gradient(135deg, #c62828, #ef5350); }
+  .btn-compare-col.theme-ambit { background: linear-gradient(135deg, #2e7d32, #66bb6a); }
+
+  .merge-info { background: #e8eaf6; border-radius: 8px; padding: .5rem .8rem; margin-bottom: .8rem; font-size: .75rem; color: #303f9f; display: none; }
+  .merge-info.visible { display: block; }
+
+  /* Summary — compact inline */
+  .summary-bar { display: flex; gap: .5rem; margin-bottom: .6rem; flex-wrap: wrap; align-items: stretch; }
+  .summary-group { border-radius: 8px; padding: .4rem .6rem; display: flex; flex-direction: column; gap: .15rem; min-width: 120px; flex: 1; }
+  .summary-group .sg-title { font-size: .55rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .85; }
+  .summary-group .sg-stats { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+  .summary-group .sg-stat { font-size: .7rem; font-weight: 700; }
+  .summary-group .sg-stat small { font-size: .55rem; font-weight: 600; opacity: .8; }
+  .sg-eero { background: linear-gradient(135deg, #e3f2fd, #bbdefb); color: #1565c0; }
+  .sg-bm { background: linear-gradient(135deg, #fff3e0, #ffe0b2); color: #e65100; }
+  .sg-cm { background: linear-gradient(135deg, #fce4ec, #f8bbd0); color: #c62828; }
+  .sg-result { background: linear-gradient(135deg, #e8eaf6, #c5cae9); color: #283593; }
+  .sg-pass { color: #2e7d32; } .sg-fail { color: #c62828; }
+
+  /* Filters */
+  .filters { display: flex; align-items: center; gap: .8rem; margin-bottom: .5rem; flex-wrap: wrap; }
+  .filters label { font-size: .78rem; font-weight: 600; color: #555; }
+  .filters select, .filters input[type="text"] { padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 5px; font-size: .78rem; }
+  .multi-select { position: relative; display: inline-block; min-width: 160px; }
+  .multi-select-btn { padding: .35rem .5rem; border: 1px solid #ccc; border-radius: 5px; font-size: .78rem; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: .3rem; user-select: none; }
+  .multi-select-btn::after { content: '▾'; font-size: .65rem; color: #888; }
+  .multi-select-dropdown { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid #ccc; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.12); z-index: 200; min-width: 180px; padding: .3rem 0; margin-top: 2px; }
+  .multi-select-dropdown.open { display: block; }
+  .multi-select-dropdown label { display: flex; align-items: center; gap: .4rem; padding: .3rem .6rem; font-size: .75rem; cursor: pointer; white-space: nowrap; }
+  .multi-select-dropdown label:hover { background: #f0f2ff; }
+  .multi-select-dropdown input[type="checkbox"] { margin: 0; accent-color: #5c6bc0; }
+  .multi-select-tags { display: flex; flex-wrap: wrap; gap: .2rem; }
+  .ms-tag { background: #e8eaf6; color: #303f9f; padding: .1rem .35rem; border-radius: 3px; font-size: .62rem; font-weight: 600; }
+  .btn-export { margin-left: auto; padding: .4rem 1rem; background: #4caf50; color: #fff; border: none; border-radius: 5px; font-size: .78rem; font-weight: 600; cursor: pointer; }
+  .showing-text { font-size: .72rem; color: #888; margin-bottom: .4rem; }
+
+  /* Table */
+  .table-wrap { background: #fff; border-radius: 10px; overflow: auto; box-shadow: 0 1px 4px rgba(0,0,0,.06); max-height: 70vh; }
+  table { width: 100%; border-collapse: collapse; font-size: .55rem; }
+  thead th { background: #eef; padding: .2rem .15rem; text-align: left; font-size: .48rem; color: #555; border-bottom: 2px solid #ddd; white-space: nowrap; position: sticky; top: 0; z-index: 10; }
+  thead th.h-eero { background: #e3f2fd; color: #1565c0; }
+  thead th.h-cm { background: #fce4ec; color: #c62828; }
+  thead th.h-result { background: #f3e5f5; color: #6a1b9a; }
+  tbody tr { border-bottom: 1px solid #eee; }
+  tbody tr:hover { background: #fafafe; }
+  td { padding: .2rem .15rem; vertical-align: top; word-break: break-word; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+  .badge { display: inline-block; padding: .1rem .3rem; border-radius: 3px; font-size: .52rem; font-weight: 700; text-transform: uppercase; }
+  .badge-match    { background: #e8f5e9; color: #2e7d32; }
+  .badge-mismatch { background: #fff3e0; color: #e65100; }
+  .badge-missing  { background: #ffebee; color: #c62828; }
+  .pass { color: #4caf50; font-weight: 700; font-size: .6rem; }
+  .fail { color: #f44336; font-weight: 700; font-size: .6rem; }
+  .result-pass { background: #e8f5e9; color: #2e7d32; font-weight: 700; text-align: center; font-size: .6rem; }
+  .result-fail { background: #ffebee; color: #c62828; font-weight: 700; text-align: center; font-size: .6rem; }
+  .diff-detail { font-size: .52rem; color: #e65100; }
+  .hidden { display: none; }
+  .col-med { max-width: 90px; word-break: break-word; }
+  .comment-input { width: 100%; min-width: 70px; padding: .15rem .25rem; border: 1px solid #ddd; border-radius: 3px; font-size: .55rem; background: #fafafa; }
+  .comment-input:focus { border-color: #5c6bc0; outline: none; background: #fff; }
+
+  @media (max-width: 768px) {
+    .upload-layout { flex-direction: column; }
+    .cm-sidebar { flex-direction: row; }
+    .upload-area { grid-template-columns: 1fr; }
+    .summary-cards { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:.8rem;">
+    <h1 style="margin:0;font-size:1.2rem;font-weight:700;">&#128295; SMT BOM Comparison Tool</h1>
+    <button id="btnInstruction" onclick="window.open('https://robert-hoang.github.io/Material-preparation/material-preparation.html','_blank')" style="background:linear-gradient(135deg,#ff9800,#ff5722);border:none;color:#fff;padding:.35rem 1rem;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(255,87,34,.4);">&#128203; Material Preparation</button>
+  </div>
+  <div style="text-align:right;line-height:1.4">
+    <div class="brand">eero &#8212; PQE</div>
+    <div style="font-size:.65rem;opacity:.7">Rev: A | Designer: Robert Hoang</div>
+  </div>
+</div>
+<div class="main">
+
+<div class="upload-layout">
+  <div class="cm-sidebar">
+    <div class="cm-btn cm-luxshare active" onclick="switchCM('luxshare',this)">
+      <div class="cm-name">Luxshare</div>
+      <div class="cm-status">&#9679; Active</div>
+    </div>
+    <div class="cm-btn cm-pegatron" onclick="switchCM('pegatron',this)">
+      <div class="cm-name">Pegatron</div>
+      <div class="cm-status">&#9679; Active</div>
+    </div>
+    <div class="cm-btn cm-ambit" onclick="switchCM('ambit',this)">
+      <div class="cm-name">Foxconn (Ambit)</div>
+      <div class="cm-status">&#9679; Active</div>
+    </div>
+  </div>
+  <div class="upload-area theme-luxshare" id="uploadArea">
+    <div>
+      <div class="upload-col-title">&#11015; UPLOAD EERO BOM &#8212; CLICK BOXES BELOW</div>
+      <div class="upload-box" id="box-loc-lux" onclick="document.getElementById('file-loc').click()">
+        <div class="icon">&#128205;</div><div class="label">SMT eero BOM &#8212; Indented</div>
+        <div class="sub">Item Number, Item Name, Qty, Ref Des</div>
+        <div class="file-name" id="fname-loc"></div>
+        <input type="file" id="file-loc" accept=".csv,.xlsx,.xls">
+      </div>
+      <div class="upload-box" id="box-src-lux" onclick="document.getElementById('file-src').click()">
+        <div class="icon">&#127981;</div><div class="label">SMT eero BOM &#8212; Sourcing</div>
+        <div class="sub">Item Number, Manufacturer, MPN, Rank</div>
+        <div class="file-name" id="fname-src"></div>
+        <input type="file" id="file-src" accept=".csv,.xlsx,.xls">
+      </div>
+    </div>
+    <div>
+      <div class="upload-col-title">&#11015; UPLOAD CM BOM &#8212; CLICK BOX BELOW</div>
+      <div class="upload-box" id="box-bm-lux" onclick="document.getElementById('file-bm').click()">
+        <div class="icon">&#128203;</div><div class="label">SMT Build Matrix (Optional)</div>
+        <div class="sub">SMT Build Matrix &#8212; eeroPN, Description, Vendor, Vendor PN</div>
+        <div class="file-name" id="fname-bm"></div>
+        <input type="file" id="file-bm" accept=".csv,.xlsx,.xls">
+      </div>
+    </div>
+    <div id="cmBomCol">
+      <div class="upload-col-title">&#11015; UPLOAD CM BOM &#8212; CLICK BOX BELOW</div>
+      <div class="cm-bom-panel active" data-cm="luxshare">
+        <div class="upload-box" id="box-cm-lux" onclick="document.getElementById('file-cm-lux').click()">
+          <div class="icon">&#128230;</div><div class="label">SMT CM BOM</div>
+          <div class="sub">eeroP/N, Part_no, item_name, Vendor, Vendor P/N, Qty, Location</div>
+          <div class="file-name" id="fname-cm-lux"></div>
+          <input type="file" id="file-cm-lux" accept=".csv,.xlsx,.xls">
+        </div>
+        <button class="btn-compare-col theme-luxshare" onclick="switchCM('luxshare',document.querySelector('.cm-btn.cm-luxshare'));runCompare();" disabled data-cm="luxshare">&#9654; Compare BOMs</button>
+      </div>
+      <div class="cm-bom-panel" data-cm="pegatron">
+        <div class="upload-box" id="box-cm-peg" onclick="document.getElementById('file-cm-peg').click()">
+          <div class="icon">&#128230;</div><div class="label">SMT CM BOM</div>
+          <div class="sub">Upload Pegatron BOM</div>
+          <div class="file-name" id="fname-cm-peg"></div>
+          <input type="file" id="file-cm-peg" accept=".csv,.xlsx,.xls">
+        </div>
+        <button class="btn-compare-col theme-pegatron" onclick="switchCM('pegatron',document.querySelector('.cm-btn.cm-pegatron'));runCompare();" disabled data-cm="pegatron">&#9654; Compare BOMs</button>
+      </div>
+      <div class="cm-bom-panel" data-cm="ambit">
+        <div class="upload-box" id="box-cm-fox" onclick="document.getElementById('file-cm-fox').click()">
+          <div class="icon">&#128230;</div><div class="label">SMT CM BOM</div>
+          <div class="sub">Upload Foxconn BOM</div>
+          <div class="file-name" id="fname-cm-fox"></div>
+          <input type="file" id="file-cm-fox" accept=".csv,.xlsx,.xls">
+        </div>
+        <button class="btn-compare-col theme-ambit" onclick="switchCM('ambit',document.querySelector('.cm-btn.cm-ambit'));runCompare();" disabled data-cm="ambit">&#9654; Compare BOMs</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="merge-info" id="mergeInfo" style="display:none"></div>
+
+<div id="results" class="hidden">
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="filters">
+    <label>Final Result:</label>
+    <div class="multi-select" id="msFilter">
+      <div class="multi-select-btn" id="msBtnFilter">All</div>
+      <div class="multi-select-dropdown" id="msDropFilter">
+        <label><input type="checkbox" value="PASS"> PASS</label>
+        <label><input type="checkbox" value="FAIL"> FAIL</label>
+        <label><input type="checkbox" value="MPN_MISSING"> MPN Missing in CM</label>
+        <label><input type="checkbox" value="EXTRA_CM"> Extra in CM</label>
+        <label><input type="checkbox" value="MISSING_CM"> Missing in CM</label>
+        <label><input type="checkbox" value="MISSING_EERO"> Not in eero BOM</label>
+      </div>
+    </div>
+    <label>Search:</label>
+    <input type="text" id="searchInput" placeholder="Part number...">
+    <span style="margin-left:.6rem;font-size:.72rem;color:#555;display:flex;gap:.8rem;flex-wrap:wrap;">
+      <label style="cursor:pointer"><input type="checkbox" id="fltBM" style="margin-right:2px"> Build Matrix only</label>
+      <label style="cursor:pointer"><input type="checkbox" id="fltCM" style="margin-right:2px"> CM BOM only</label>
+      <label style="cursor:pointer"><input type="checkbox" id="fltEero" style="margin-right:2px"> eero BOM only</label>
+    </span>
+    <button class="btn-export" id="btnExport">📥 Export Excel</button>
+    <button class="btn-export" id="btnExportCSV" style="background:#ff9800;">📥 Export CSV</button>
+    <button class="btn-export" id="btnExportPDF" style="background:#5c6bc0;">📄 Export PDF</button>
+  </div>
+  <div class="showing-text" id="showingText"></div>
+  <div class="table-wrap">
+    <table>
+      <thead id="tHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script>
+
+let activeCM = 'luxshare';
+let locRaw = null, srcRaw = null, mergedEero = null;
+let bmData = null; // Build Matrix parsed data: { eeroPN -> { desc, vendor, vpn } }
+const cmData = { luxshare: null, pegatron: null, ambit: null };
+let comparisonResults = [];
+
+function switchCM(cm, el) {
+  activeCM = cm;
+  document.querySelectorAll('.cm-btn').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  // Switch CM BOM panel
+  document.querySelectorAll('.cm-bom-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.querySelector(`.cm-bom-panel[data-cm="${cm}"]`);
+  if (panel) panel.classList.add('active');
+  // Switch upload area theme color
+  const area = document.getElementById('uploadArea');
+  area.className = 'upload-area theme-' + cm;
+  document.getElementById('results').classList.add('hidden');
+  updateBtn();
+}
+function updateBtn() {
+  const hasEero = mergedEero && Object.keys(mergedEero).length > 0;
+  document.querySelectorAll('.btn-compare-col').forEach(btn => {
+    const cm = btn.getAttribute('data-cm');
+    const ok = hasEero && cmData[cm] && cmData[cm].length > 1;
+    btn.disabled = !ok;
+  });
+}
+
+function readXL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        resolve(XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' }));
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// Read Build Matrix — let user pick sheet
+function readBuildMatrix(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+        resolve(wb);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function showSheetPicker(sheetNames, callback) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;padding:1.2rem;min-width:280px;max-width:400px;box-shadow:0 8px 30px rgba(0,0,0,.2);';
+  box.innerHTML = '<div style="font-weight:700;font-size:.9rem;margin-bottom:.8rem;color:#1a1a2e;">📋 Select Sheet</div>';
+  sheetNames.forEach((name, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.style.cssText = 'display:block;width:100%;padding:.5rem .8rem;margin-bottom:.4rem;border:1px solid #ddd;border-radius:6px;background:#f8f9ff;cursor:pointer;font-size:.8rem;text-align:left;transition:all .15s;';
+    btn.onmouseenter = () => btn.style.background = '#e8eaf6';
+    btn.onmouseleave = () => btn.style.background = '#f8f9ff';
+    btn.onclick = () => { document.body.removeChild(overlay); callback(name); };
+    box.appendChild(btn);
+  });
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'display:block;width:100%;padding:.4rem;margin-top:.4rem;border:none;background:#eee;border-radius:6px;cursor:pointer;font-size:.75rem;color:#666;';
+  cancel.onclick = () => { document.body.removeChild(overlay); callback(null); };
+  box.appendChild(cancel);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+function showConfigPicker(configs, callback) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;padding:1.2rem;min-width:300px;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 30px rgba(0,0,0,.2);';
+  box.innerHTML = '<div style="font-weight:700;font-size:.9rem;margin-bottom:.8rem;color:#1a1a2e;">⚙️ Select Config</div>';
+  configs.forEach(cfg => {
+    const btn = document.createElement('button');
+    btn.innerHTML = '<strong>' + cfg.name + '</strong>' + (cfg.purpose ? '<br><span style="font-size:.65rem;color:#666;">' + cfg.purpose + '</span>' : '');
+    btn.style.cssText = 'display:block;width:100%;padding:.5rem .8rem;margin-bottom:.4rem;border:1px solid #ddd;border-radius:6px;background:#f8f9ff;cursor:pointer;font-size:.78rem;text-align:left;transition:all .15s;';
+    btn.onmouseenter = () => btn.style.background = '#e8eaf6';
+    btn.onmouseleave = () => btn.style.background = '#f8f9ff';
+    btn.onclick = () => { document.body.removeChild(overlay); callback(cfg); };
+    box.appendChild(btn);
+  });
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.style.cssText = 'display:block;width:100%;padding:.4rem;margin-top:.4rem;border:none;background:#eee;border-radius:6px;cursor:pointer;font-size:.75rem;color:#666;';
+  cancel.onclick = () => { document.body.removeChild(overlay); callback(null); };
+  box.appendChild(cancel);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+// Detect all configs from Build Matrix sheet
+function detectBMConfigs(aoa) {
+  const configs = [];
+  for (let i = 0; i < Math.min(70, aoa.length); i++) {
+    const row = aoa[i].map(c => String(c).toLowerCase().trim());
+    if (row.includes('build config')) {
+      const configRowIdx = i;
+      const purposeRowIdx = i + 1;
+      const purposeRow = aoa[purposeRowIdx] ? aoa[purposeRowIdx] : [];
+      // Find header row for this section (has eeroPN, Component, etc.)
+      let headerRowIdx = -1;
+      for (let j = i + 1; j < Math.min(i + 10, aoa.length); j++) {
+        const r = aoa[j].map(c => String(c).toLowerCase().trim());
+        if (r.some(c => c.includes('eeropn') || c.includes('eero pn') || (c.includes('component') && r.some(c2 => c2.includes('vendor'))))) {
+          headerRowIdx = j; break;
+        }
+      }
+      // Extract config names from the config row
+      for (let col = 0; col < aoa[configRowIdx].length; col++) {
+        const name = String(aoa[configRowIdx][col] ?? '').trim();
+        if (name && name.toLowerCase() !== 'build config' && name.length < 30) {
+          const purpose = String(purposeRow[col] ?? '').trim().replace(/\n/g, ' ');
+          configs.push({ name, purpose, col, configRowIdx, headerRowIdx });
+        }
+      }
+    }
+  }
+  return configs;
+}
+
+// Parse Build Matrix for a specific config
+function parseBuildMatrixForConfig(aoa, config) {
+  const hr = config.headerRowIdx;
+  if (hr < 0) return null;
+  const headers = aoa[hr].map(c => String(c).toLowerCase().trim());
+  const cPN = headers.findIndex(c => c.includes('eeropn') || c.includes('eero pn'));
+  const cDesc = headers.findIndex(c => c.includes('description'));
+  const cVendor = headers.findIndex(c => c === 'vendor' || c.includes('supplier'));
+  const cVPN = headers.findIndex(c => c.includes('vendor pn') || c.includes('vendor p/n') || c.includes('vendorpn'));
+  const cRefDes = headers.findIndex(c => c.includes('ref des') || c.includes('refdes'));
+  const configCol = config.col;
+  if (cPN < 0) return null;
+
+  const map = {};
+  let lastPN = '';
+  // Find end of this section (next "Build Config" row or end of data)
+  let endRow = aoa.length;
+  for (let i = hr + 2; i < aoa.length; i++) {
+    const row = aoa[i].map(c => String(c).toLowerCase().trim());
+    if (row.includes('build config') || (row.some(c => c.includes('smt deviation')) && i > hr + 5)) {
+      endRow = i; break;
+    }
+  }
+
+  for (let i = hr + 1; i < endRow; i++) {
+    const row = aoa[i];
+    const pn = String(row[cPN] ?? '').trim();
+    const vpn = cVPN >= 0 ? String(row[cVPN] ?? '').trim() : '';
+    const vendor = cVendor >= 0 ? String(row[cVendor] ?? '').trim() : '';
+    const desc = cDesc >= 0 ? String(row[cDesc] ?? '').trim() : '';
+    const configVal = String(row[configCol] ?? '').trim();
+
+    if (pn) lastPN = pn;
+    if (!lastPN) continue;
+    if (!vendor && !vpn) continue;
+
+    // Check if this config uses this part (value >= 1)
+    const numVal = parseFloat(configVal);
+    if (!numVal || numVal < 1) continue;
+
+    if (!map[lastPN]) map[lastPN] = [];
+    map[lastPN].push({ desc, vendor, vpn });
+  }
+  return map;
+}
+
+// Legacy parse for simple Build Matrix format (backward compatible)
+function parseBuildMatrix(aoa) {
+  // Check if this is the new multi-config format
+  const hasConfigRow = aoa.some(row => row.some(c => String(c).toLowerCase().trim() === 'build config'));
+  if (hasConfigRow) return null; // Need config selection, handled separately
+
+  const bmKw = ['eeropn','vendor','description','component','ref des'];
+  let hr = 0;
+  for (let i = 0; i < Math.min(10, aoa.length); i++) {
+    const row = aoa[i].map(c => String(c).toLowerCase().trim());
+    if (row.filter(c => bmKw.some(k => c.includes(k))).length >= 2) { hr = i; break; }
+  }
+  const cols = aoa[hr].map(c => String(c).toLowerCase().trim());
+  const cPN = cols.findIndex(c => c.includes('eeropn') || c.includes('eero pn'));
+  const cDesc = cols.findIndex(c => c.includes('description'));
+  const cVendor = cols.findIndex(c => c === 'vendor' || c.includes('supplier'));
+  const cVPN = cols.findIndex(c => c.includes('vendor pn') || c.includes('vendor p/n') || c.includes('vendorpn'));
+  if (cPN < 0) return null;
+  const map = {};
+  for (let i = hr + 1; i < aoa.length; i++) {
+    const row = aoa[i];
+    const pn = String(row[cPN] ?? '').trim();
+    if (!pn) continue;
+    const vpn = cVPN >= 0 ? String(row[cVPN] ?? '').trim() : '';
+    const vendor = cVendor >= 0 ? String(row[cVendor] ?? '').trim() : '';
+    const desc = cDesc >= 0 ? String(row[cDesc] ?? '').trim() : '';
+    if (!map[pn]) map[pn] = [];
+    map[pn].push({ desc, vendor, vpn });
+  }
+  return map;
+}
+
+// Remove buttons
+document.querySelectorAll('.upload-box').forEach(box => {
+  if (!box.querySelector('input[type="file"]')) return;
+  const btn = document.createElement('button');
+  btn.className = 'btn-remove'; btn.title = 'Remove'; btn.textContent = '✕';
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const fi = box.querySelector('input[type="file"]');
+    const fn = box.querySelector('.file-name');
+    if (fi) fi.value = ''; if (fn) fn.textContent = '';
+    box.classList.remove('loaded');
+    const fid = fi ? fi.id : '';
+    if (fid === 'file-loc') { locRaw = null; tryMerge(); }
+    if (fid === 'file-src') { srcRaw = null; tryMerge(); }
+    if (fid === 'file-bm') { bmData = null; }
+    if (fid === 'file-cm-lux') cmData.luxshare = null;
+    if (fid === 'file-cm-peg') cmData.pegatron = null;
+    if (fid === 'file-cm-fox') cmData.ambit = null;
+    updateBtn();
+  });
+  box.appendChild(btn);
+});
+
+// File listeners
+document.getElementById('file-loc').addEventListener('change', async function() {
+  if (!this.files[0]) return;
+  locRaw = await readXL(this.files[0]);
+  document.getElementById('fname-loc').textContent = this.files[0].name + ` (${locRaw.length} rows)`;
+  document.getElementById('box-loc-lux').classList.add('loaded');
+  tryMerge(); updateBtn();
+});
+document.getElementById('file-src').addEventListener('change', async function() {
+  if (!this.files[0]) return;
+  srcRaw = await readXL(this.files[0]);
+  document.getElementById('fname-src').textContent = this.files[0].name + ` (${srcRaw.length} rows)`;
+  document.getElementById('box-src-lux').classList.add('loaded');
+  tryMerge(); updateBtn();
+});
+document.getElementById('file-bm').addEventListener('change', async function() {
+  if (!this.files[0]) return;
+  const fileName = this.files[0].name;
+  const wb = await readBuildMatrix(this.files[0]);
+
+  const processSheet = (sheetName) => {
+    const ws = wb.Sheets[sheetName];
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const configs = detectBMConfigs(aoa);
+
+    if (configs.length > 0) {
+      // New format — show config picker
+      showConfigPicker(configs, (cfg) => {
+        if (!cfg) { document.getElementById('file-bm').value = ''; return; }
+        bmData = parseBuildMatrixForConfig(aoa, cfg);
+        const cnt = bmData ? Object.keys(bmData).length : 0;
+        document.getElementById('fname-bm').textContent = fileName + ` (${sheetName} → ${cfg.name}: ${cnt} parts)`;
+        document.getElementById('box-bm-lux').classList.add('loaded');
+      });
+    } else {
+      // Legacy format
+      bmData = parseBuildMatrix(aoa);
+      const cnt = bmData ? Object.keys(bmData).length : 0;
+      document.getElementById('fname-bm').textContent = fileName + ` (${sheetName}: ${cnt} parts)`;
+      document.getElementById('box-bm-lux').classList.add('loaded');
+    }
+  };
+
+  if (wb.SheetNames.length === 1) {
+    processSheet(wb.SheetNames[0]);
+  } else {
+    showSheetPicker(wb.SheetNames, (picked) => {
+      if (!picked) { document.getElementById('file-bm').value = ''; return; }
+      processSheet(picked);
+    });
+  }
+});
+['lux','peg','fox'].forEach((k, i) => {
+  const cmKey = ['luxshare','pegatron','ambit'][i];
+  document.getElementById('file-cm-' + k).addEventListener('change', async function() {
+    if (!this.files[0]) return;
+    cmData[cmKey] = await readXL(this.files[0]);
+    document.getElementById('fname-cm-' + k).textContent = this.files[0].name + ` (${cmData[cmKey].length} rows)`;
+    document.getElementById('box-cm-' + k).classList.add('loaded');
+    updateBtn();
+  });
+});
+
+// Helpers
+function findHeaderRow(aoa) {
+  const kw = ['item number','item name','#','quantity','ref des','manufacturer','vendor','eerop/n','part_no','location'];
+  for (let i = 0; i < Math.min(5, aoa.length); i++) {
+    const row = aoa[i].map(c => String(c).toLowerCase().trim());
+    if (row.filter(c => kw.some(k => c.includes(k))).length >= 2) return i;
+  }
+  return 0;
+}
+function findCol(cols, hints) {
+  const lower = cols.map(c => String(c).toLowerCase().trim());
+  for (const h of hints) { const i = lower.findIndex(c => c.includes(h)); if (i >= 0) return i; }
+  return -1;
+}
+function norm(v) { return String(v ?? '').trim().toLowerCase(); }
+function normLocs(str) {
+  if (!str) return [];
+  return String(str).split(/[,;]+/).map(s => s.trim().toUpperCase()).filter(Boolean).sort();
+}
+
+// Auto-merge
+function tryMerge() {
+  if (!locRaw || !srcRaw) { mergedEero = null; document.getElementById('mergeInfo').classList.remove('visible'); updateBtn(); return; }
+  const locHR = findHeaderRow(locRaw), locCols = locRaw[locHR].map(c => String(c).trim());
+  const srcHR = findHeaderRow(srcRaw), srcCols = srcRaw[srcHR].map(c => String(c).trim());
+  const lItem=findCol(locCols,['item number']), lName=findCol(locCols,['item name']), lQty=findCol(locCols,['quantity']), lRef=findCol(locCols,['ref des','refdes','location','designator']), lCat=findCol(locCols,['category']);
+  const sItem=findCol(srcCols,['item number']), sMfr=findCol(srcCols,['manufacturer']), sMpn=findCol(srcCols,['manufacturer item','manufacturer part']), sRank=findCol(srcCols,['rank']), sStat=findCol(srcCols,['status']);
+
+  const sourceMap = {}; let curPN = '';
+  for (let i = srcHR+1; i < srcRaw.length; i++) {
+    const row = srcRaw[i], itemNum = String(row[sItem]??'').trim();
+    if (itemNum) curPN = itemNum; if (!curPN) continue;
+    const mfr = String(row[sMfr]??'').trim(), mpn = String(row[sMpn]??'').trim();
+    if (!mfr && !mpn) continue;
+    if (!sourceMap[curPN]) sourceMap[curPN] = [];
+    sourceMap[curPN].push({ mfr, mpn, rank: String(row[sRank]??'').trim(), status: sStat>=0?String(row[sStat]??'').trim():'' });
+  }
+
+  mergedEero = {}; let cnt = 0;
+  for (let i = locHR+1; i < locRaw.length; i++) {
+    const row = locRaw[i], itemNum = String(row[lItem]??'').trim();
+    if (!itemNum) continue;
+    const key = itemNum.replace(/\s+rev\s+\w+$/i,'').trim();
+    const rev = itemNum.match(/rev\s+(\w+)/i);
+    const sources = sourceMap[itemNum] || sourceMap[key] || [];
+    mergedEero[key] = {
+      fullPN: itemNum, partName: String(row[lName]??'').trim(), qty: String(row[lQty]??'').trim(),
+      refDes: String(row[lRef]??'').trim(), category: lCat>=0?String(row[lCat]??'').trim():'',
+      revision: rev?rev[1]:'', sources,
+      sourcesStr: sources.map(s => s.mfr+' / '+s.mpn).join('\n'),
+    };
+    cnt++;
+  }
+  const info = document.getElementById('mergeInfo');
+  info.innerHTML = `✅ <strong>Auto-merged:</strong> ${cnt} parts, ${Object.values(sourceMap).reduce((a,b)=>a+b.length,0)} approved sources.`;
+  info.classList.add('visible'); updateBtn();
+}
+
+// Auto-detect CM BOM columns from header row
+function detectCMCols(aoa) {
+  // Find header row — scan first 50 rows for the best match
+  const kw = ['eerop/n','eero p/n','item number','item description','bom.item','bom.qty','bom.ref','vendor','supplier','manufacturer','mfr. name','mfr. part','manufacturers.mfr','qty','quantity','ref des','refdes','location','item rev','arena','qualification','find num','level','designator','placement','number'];
+  let hr = 0, bestHits = 0;
+  for (let i = 0; i < Math.min(50, aoa.length); i++) {
+    const row = aoa[i].map(c => String(c).toLowerCase().trim());
+    const hits = row.filter(c => c && kw.some(k => c.includes(k))).length;
+    if (hits >= 3 && hits > bestHits) { bestHits = hits; hr = i; }
+  }
+  if (bestHits < 3) hr = 0;
+  const headers = aoa[hr].map(c => String(c).toLowerCase().trim());
+
+  // Smart column finder — tries multiple keyword patterns
+  const find = (...patterns) => {
+    for (const p of patterns) {
+      const idx = headers.findIndex(h => {
+        if (typeof p === 'function') return p(h);
+        return h.includes(p);
+      });
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  // Detect if this is Ambit format (has "number" column + "manufacturers.mfr" columns)
+  const isAmbitAgile = headers.some(h => h === 'number') && headers.some(h => h.includes('manufacturers.mfr'));
+
+  return {
+    headerRow: hr,
+    isAmbitAgile,
+    eeroPN: find(h => h.includes('eero') && (h.includes('p/n') || h.includes('pn') || h.includes('part')), 'eerop/n', 'eero p/n', 'eero part', 'item number', h => h === 'number'),
+    rev: find('bom.item rev', 'item rev', 'rev'),
+    cmPN: find(h => !h.includes('eero') && !h.includes('vendor') && !h.includes('mfr') && (h.includes('part_no') || h.includes('part no') || h === 'part number'), 'part_no', 'part no'),
+    itemName: find('bom.item description', 'item_name', 'item name', 'item description', 'description', 'part name', 'component'),
+    vendor: find('manufacturers.mfr. name', 'mfr. name', 'mfr name', h => (h === 'vendor' || h.includes('supplier') || h.includes('manufacturer')) && !h.includes('p/n') && !h.includes('pn') && !h.includes('part'), 'vendor', 'supplier'),
+    vendorPN: find('manufacturers.mfr. part number', 'mfr. part number', 'mfr part number', 'vendor p/n', 'vendor,p/n', 'vendor pn', 'vendorpn', 'vendor part', h => h.includes('vendor') && (h.includes('p/n') || h.includes('pn'))),
+    qty: find('bom.qty', 'item,count', 'item count', 'qty', 'quantity', h => h.includes('count') && !h.includes('item')),
+    location: find('bom.ref des', 'ref des', 'refdes', 'location', 'designator', 'placement'),
+    arenaStatus: find('manufacturers.qualification status', 'arena', 'qualification status', h => h === 'status' || h.includes('approval')),
+    remark: find('bom.bom notes', 'bom notes', 'remark', 'note', 'comment'),
+  };
+}
+
+// Compare
+
+function runCompare() {
+  try {
+  const cmAoa = cmData[activeCM];
+  if (!cmAoa || !mergedEero) return;
+  const cols = detectCMCols(cmAoa);
+  if (cols.eeroPN < 0) { alert('Cannot detect eero P/N column in CM BOM. Please check file format.'); return; }
+  const cmHR = cols.headerRow;
+
+  // Parse all CM rows — handle multi-row parts (Ambit format: sub-rows have no Item Number)
+  // Helper: normalize Ambit Part No — strip suffix letters/numbers after base PN
+  // e.g. "120-00028ED" → "120-00028", "120-00074-D" → "120-00074", "195-00022-T" → "195-00022"
+  // But keep base like "120-00165-M" → "120-00165"
+  // Pattern: base is digits-digits, suffix is optional -?[A-Za-z0-9]+
+  function normalizeAmbitPN(pn) {
+    // Strip "S" suffix from PCBA part numbers like "830-01700S"
+    // Strip letter/letter-number suffixes: 120-00028ED, 120-00064A, 120-00074-D, 120-00196M, 155-00140-M
+    const m = pn.match(/^(\d{3}-\d{5})(?:[-]?[A-Za-z]\d?|[A-Za-z]{1,2}\d?)?$/);
+    if (m) return m[1];
+    // Also handle "830-01700S" → "830-01700"
+    const m2 = pn.match(/^(\d{3}-\d{5})[A-Za-z]$/);
+    if (m2) return m2[1];
+    return pn;
+  }
+
+  const cmRows = [];
+  const g = (row, idx) => idx >= 0 ? String(row[idx] ?? '').trim() : '';
+  let lastPart = null;
+  for (let i = cmHR+1; i < cmAoa.length; i++) {
+    const row = cmAoa[i];
+    let ep = g(row, cols.eeroPN);
+    const vendor = g(row, cols.vendor), vendorPN = g(row, cols.vendorPN);
+    if (ep) {
+      const rawEeroPN = ep; // original eero P/N as written in CM BOM
+      // For Ambit format: skip Level 0 row (PCBA itself) and normalize Part No
+      if (cols.isAmbitAgile) {
+        const levelCol = cmAoa[cmHR].findIndex(c => String(c).toLowerCase().trim() === 'level');
+        const level = levelCol >= 0 ? String(row[levelCol] ?? '').trim() : '';
+        if (level === '0') continue; // Skip PCBA row
+        const normPN = normalizeAmbitPN(ep);
+        if (mergedEero[normPN]) ep = normPN;
+        else if (!mergedEero[ep] && mergedEero[normPN]) ep = normPN;
+      }
+      let rawRev = g(row, cols.rev);
+      const revMatch = rawRev.match(/^([A-Za-z0-9]{1,2})/);
+      rawRev = revMatch ? revMatch[1] : rawRev;
+      lastPart = {
+        eeroPN: ep, rawEeroPN, rev: rawRev, cmPN: g(row, cols.cmPN),
+        itemName: g(row, cols.itemName), vendor, vendorPN,
+        qty: g(row, cols.qty), location: g(row, cols.location),
+        remark: g(row, cols.remark), arenaStatus: g(row, cols.arenaStatus),
+        altMfrs: [],
+      };
+      cmRows.push(lastPart);
+    } else if (lastPart && (vendor || vendorPN)) {
+      // Sub-row with alternate manufacturer — belongs to lastPart
+      lastPart.altMfrs.push({ vendor, vendorPN, arenaStatus: g(row, cols.arenaStatus) });
+    }
+  }
+
+  // === BASELINE: eero Sourcing MPN ===
+  // Build CM MPN lookup: { partNo -> [ { vendor, vendorPN, ... } ] } including alt mfrs
+  const cmMPNLookup = {};
+  for (const c of cmRows) {
+    if (!cmMPNLookup[c.eeroPN]) cmMPNLookup[c.eeroPN] = [];
+    cmMPNLookup[c.eeroPN].push(c);
+    if (c.altMfrs) c.altMfrs.forEach(a => {
+      cmMPNLookup[c.eeroPN].push({ ...c, vendor: a.vendor, vendorPN: a.vendorPN, arenaStatus: a.arenaStatus || c.arenaStatus, _isAlt: true });
+    });
+  }
+
+  comparisonResults = [];
+  let idx = 0;
+  const cmMPNUsed = new Set(); // track CM MPNs that matched an eero source
+
+  // Helper: compute location diff for a part
+  function computeLocDiff(eero, cmRow) {
+    if (!cmRow) return { match: false, diff: 'Missing in CM' };
+    const eLocs = normLocs(eero.refDes), cLocs = normLocs(cmRow.location);
+    const locMatch = eLocs.join(',')===cLocs.join(',');
+    let locDiff = '';
+    if (!locMatch) {
+      const countMap = (arr) => { const m = {}; arr.forEach(l => m[l] = (m[l]||0) + 1); return m; };
+      const eMap = countMap(eLocs), cMap = countMap(cLocs);
+      const allKeys = [...new Set([...Object.keys(eMap), ...Object.keys(cMap)])].sort();
+      const onlyEero = [], onlyCM = [];
+      for (const k of allKeys) {
+        const eC = eMap[k]||0, cC = cMap[k]||0;
+        if (eC > cC) for (let x = 0; x < eC - cC; x++) onlyEero.push(k);
+        if (cC > eC) for (let x = 0; x < cC - eC; x++) onlyCM.push(k);
+      }
+      const dupE = Object.entries(eMap).filter(([,v]) => v > 1).map(([k,v]) => k + ' x' + v);
+      const dupC = Object.entries(cMap).filter(([,v]) => v > 1).map(([k,v]) => k + ' x' + v);
+      const lines = [];
+      if (onlyEero.length) lines.push('eero BOM: ' + onlyEero.join(', '));
+      if (onlyCM.length) lines.push('CM BOM: ' + onlyCM.join(', '));
+      if (dupE.length) lines.push('eero BOM has duplicate: ' + dupE.join(', '));
+      if (dupC.length) lines.push('CM BOM has duplicate: ' + dupC.join(', '));
+      locDiff = lines.join('\n');
+    }
+    return { match: locMatch, diff: locDiff };
+  }
+
+  // 1) Iterate baseline — BM entries when loaded, otherwise eero sources
+  for (const [ep, eero] of Object.entries(mergedEero)) {
+    const cmEntries = cmMPNLookup[ep] || [];
+    const firstCM = cmRows.find(c => c.eeroPN === ep) || null;
+    const emptyCM = { eeroPN: ep, rawEeroPN:'', rev:'', cmPN:'', itemName:'', vendor:'', vendorPN:'', qty:'', location:'', remark:'', arenaStatus:'', altMfrs:[] };
+
+    // Build BM lookup for this part (if BM loaded)
+    const bmEntries = bmData ? (bmData[ep] || null) : null;
+    const bmSrcSet = new Set(); // set of eero source indices that match BM entries
+    if (bmEntries) {
+      for (let si = 0; si < (eero.sources||[]).length; si++) {
+        const s = eero.sources[si];
+        const inBM = bmEntries.some(b => {
+          const bv = norm(b.vendor), sv = norm(s.mfr);
+          const vendorOk = !bv || !sv || bv === sv || bv.includes(sv) || sv.includes(bv);
+          const mpnOk = !b.vpn || norm(b.vpn) === norm(s.mpn);
+          return vendorOk && mpnOk;
+        });
+        if (inBM) bmSrcSet.add(si);
+      }
+    }
+
+    if (!eero.sources || eero.sources.length === 0) {
+      idx++;
+      const cm = firstCM || emptyCM;
+      const checks = {};
+      checks.rev = { eero: eero.revision, cm: cm.rev, match: !eero.revision || !cm.rev || norm(eero.revision)===norm(cm.rev) };
+      checks.itemName = { eero: eero.partName, cm: cm.itemName, match: norm(eero.partName)===norm(cm.itemName) };
+      checks.qty = { eero: eero.qty, cm: cm.qty, match: norm(eero.qty)===norm(cm.qty) };
+      checks.location = computeLocDiff(eero, firstCM);
+      checks.mpnInSources = { match: !cm.vendorPN };
+      checks.eeroMfr = ''; checks.eeroMPN = '';
+      checks.vendor = { eero: '', cm: cm.vendor, match: !cm.vendor, na: !!cm.vendor };
+      checks.status = { eero: '', cm: cm.arenaStatus, match: !cm.arenaStatus };
+      checks.eeroAllSources = [];
+      if (bmData) {
+        checks.bmInMatrix = !!bmEntries;
+        checks.bmResult = '—'; checks.bmDetail = '';
+      }
+      const allPass = checks.rev.match && checks.itemName.match && checks.qty.match && checks.location.match && checks.mpnInSources.match && checks.vendor.match && !checks.vendor.na;
+      comparisonResults.push({ idx, eeroPN: ep, overall: firstCM ? (allPass?'PASS':'FAIL') : 'Missing in CM', eero, cm: firstCM || cm, checks });
+    } else {
+      // Iterate ALL eero sources — mark which are in BM
+      for (let si = 0; si < eero.sources.length; si++) {
+        const src = eero.sources[si];
+        idx++;
+        const isInBM = bmEntries ? bmSrcSet.has(si) : false;
+
+        // Find CM row with matching MPN (exact)
+        const cmMatch = cmEntries.find(ce => norm(ce.vendorPN) === norm(src.mpn));
+        let cmDisplay = cmMatch;
+        if (!cmMatch && src.mfr) cmDisplay = cmEntries.find(ce => ce.vendorPN && (norm(ce.vendor) === norm(src.mfr) || norm(ce.vendor).includes(norm(src.mfr)) || norm(src.mfr).includes(norm(ce.vendor))));
+        if (!cmDisplay) cmDisplay = cmMatch;
+        const cm = cmMatch || cmDisplay || firstCM || emptyCM;
+        if (cmMatch) cmMPNUsed.add(norm(cmMatch.vendorPN) + '||' + ep);
+        const mpnFound = !!cmMatch;
+
+        const checks = {};
+        const refCM = firstCM || cm;
+        checks.rev = { eero: eero.revision, cm: refCM.rev, match: !eero.revision || !refCM.rev || norm(eero.revision)===norm(refCM.rev) };
+        checks.itemName = { eero: eero.partName, cm: refCM.itemName, match: norm(eero.partName)===norm(refCM.itemName) };
+        checks.qty = { eero: eero.qty, cm: refCM.qty, match: norm(eero.qty)===norm(refCM.qty) };
+        checks.location = computeLocDiff(eero, firstCM);
+        checks.mpnInSources = { match: mpnFound };
+        checks.eeroMfr = src.mfr;
+        checks.eeroMPN = src.mpn;
+        checks.eeroRank = src.rank;
+        checks.eeroAllSources = eero.sources;
+        // Vendor
+        const cmVendor = (cmMatch || cmDisplay) ? (cmMatch || cmDisplay).vendor : (firstCM ? firstCM.vendor : '');
+        const vendorBothEmpty = !src.mfr && !cmVendor;
+        const vendorOneEmpty = (!src.mfr) !== (!cmVendor);
+        const vendorMatch = vendorBothEmpty || (!vendorOneEmpty && (norm(src.mfr)===norm(cmVendor) || norm(src.mfr).includes(norm(cmVendor)) || norm(cmVendor).includes(norm(src.mfr))));
+        checks.vendor = { eero: src.mfr, cm: cmVendor, match: vendorMatch, na: vendorOneEmpty };
+        // Status
+        const cmStatus = (cmMatch || cmDisplay) ? ((cmMatch || cmDisplay).arenaStatus||'') : (firstCM ? (firstCM.arenaStatus||'') : '');
+        checks.status = { eero: src.status||'', cm: cmStatus, match: norm(src.status||'')===norm(cmStatus) || (!src.status && !cmStatus) };
+        // Build Matrix
+        if (bmData) {
+          checks.bmInMatrix = isInBM;
+          if (isInBM) {
+            // Find the BM entry that matched this source
+            const matchedBM = bmEntries.find(b => {
+              const bv = norm(b.vendor), sv = norm(src.mfr);
+              const vendorOk = !bv || !sv || bv === sv || bv.includes(sv) || sv.includes(bv);
+              const mpnOk = !b.vpn || norm(b.vpn) === norm(src.mpn);
+              return vendorOk && mpnOk;
+            });
+            if (matchedBM && matchedBM.vpn) {
+              const bmVPN = norm(matchedBM.vpn);
+              const cmMPNMatch = cmMatch ? bmVPN === norm(cmMatch.vendorPN) : false;
+              checks.bmResult = cmMPNMatch ? 'PASS' : 'FAIL';
+              checks.bmDetail = cmMPNMatch ? '' : 'CM MPN';
+              checks.bmVPN = matchedBM.vpn;
+            } else {
+              checks.bmResult = 'PASS';
+              checks.bmDetail = '';
+            }
+          } else {
+            checks.bmResult = '—';
+            checks.bmDetail = '';
+          }
+        }
+
+        const bmOk = !bmData || !isInBM || checks.bmResult === 'PASS';
+        const allPass = !!firstCM && checks.rev.match && checks.itemName.match && checks.qty.match && checks.location.match && mpnFound && checks.status.match && checks.vendor.match && !checks.vendor.na && bmOk;
+        const overall = !firstCM ? 'Missing in CM' : (allPass ? 'PASS' : 'FAIL');
+        comparisonResults.push({ idx, eeroPN: ep, overall, eero, cm: cmMatch || firstCM || emptyCM, checks, missingMPN: !mpnFound && !!firstCM });
+      }
+    }
+  }
+
+  // 2) CM rows with MPNs not matched by any eero source → "Extra in CM"
+  for (const c of cmRows) {
+    const allCMEntries = [c, ...(c.altMfrs||[]).map(a => ({...c, vendor:a.vendor, vendorPN:a.vendorPN}))];
+    for (const ce of allCMEntries) {
+      if (!ce.vendorPN) continue;
+      const key = norm(ce.vendorPN) + '||' + ce.eeroPN;
+      if (cmMPNUsed.has(key)) continue;
+      // Check if this MPN exists in eero sources for this part
+      const eero = mergedEero[ce.eeroPN];
+      if (eero && eero.sources.some(s => norm(s.mpn) === norm(ce.vendorPN))) {
+        cmMPNUsed.add(key); continue; // already covered
+      }
+      idx++;
+      const checks = {};
+      checks.mpnInSources = { match: false };
+      checks.eeroMfr = ''; checks.eeroMPN = '';
+      checks.vendor = { eero: '', cm: ce.vendor, match: false, na: true };
+      checks.status = { eero: '', cm: ce.arenaStatus||'', match: false };
+      checks.eeroAllSources = eero ? eero.sources : [];
+      if (eero) {
+        checks.rev = { eero: eero.revision, cm: c.rev, match: norm(eero.revision)===norm(c.rev) || !eero.revision || !c.rev };
+        checks.itemName = { eero: eero.partName, cm: c.itemName, match: norm(eero.partName)===norm(c.itemName) };
+        checks.qty = { eero: eero.qty, cm: c.qty, match: norm(eero.qty)===norm(c.qty) };
+        checks.location = computeLocDiff(eero, c);
+      } else {
+        checks.rev = { eero: '', cm: c.rev, match: false };
+        checks.itemName = { eero: '', cm: c.itemName, match: false };
+        checks.qty = { eero: '', cm: c.qty, match: false };
+        checks.location = { match: false, diff: '' };
+      }
+      comparisonResults.push({ idx, eeroPN: ce.eeroPN, overall: eero ? 'FAIL' : 'Not in eero BOM', eero: eero||null, cm: {...c, vendor:ce.vendor, vendorPN:ce.vendorPN}, checks, extraInCM: true });
+    }
+  }
+
+  document.getElementById('results').classList.remove('hidden');
+  renderHeader(); render();
+  } catch(err) { alert('Compare error: ' + err.message + '\n' + err.stack); }
+}
+
+function renderHeader() {
+  const hasBM = !!bmData;
+  document.getElementById('tHead').innerHTML = `<tr>
+    <th>#</th>
+    <th class="h-eero">eero P/N</th>
+    <th class="h-cm">CM Part No</th>
+    <th class="h-result">PN Match</th>
+    <th class="h-eero">eero Rev</th>
+    <th class="h-cm">CM Rev</th>
+    <th class="h-result">Rev</th>
+    <th class="h-eero">eero Item Name</th>
+    <th class="h-cm">CM Item Name</th>
+    <th class="h-result">Item Name</th>
+    <th class="h-eero">eero Qty</th>
+    <th class="h-cm">CM Qty</th>
+    <th class="h-result">Qty</th>
+    <th class="h-eero">eero Mfr</th>
+    <th class="h-cm">CM Vendor</th>
+    <th class="h-result">Vendor</th>
+    <th class="h-eero">eero MPN</th>
+    <th class="h-cm">CM MPN</th>
+    <th class="h-result">MPN</th>
+    <th class="h-result">Location</th>
+    <th class="h-result">Location Diff</th>
+    <th class="h-eero">eero Status</th>
+    <th class="h-cm">CM Status</th>
+    <th class="h-result">Status</th>
+    ${hasBM ? '<th class="h-result">Build Matrix</th><th class="h-result">BM Result</th>' : ''}
+    <th class="h-result">Comparison Result</th>
+    <th class="h-result">eero Comment</th>
+  </tr>`;
+}
+
+// Multi-select filter
+const msBtnFilter = document.getElementById('msBtnFilter');
+const msDropFilter = document.getElementById('msDropFilter');
+msBtnFilter.addEventListener('click', (e) => { e.stopPropagation(); msDropFilter.classList.toggle('open'); });
+document.addEventListener('click', () => msDropFilter.classList.remove('open'));
+msDropFilter.addEventListener('click', (e) => e.stopPropagation());
+
+function getSelectedFilters() {
+  return [...msDropFilter.querySelectorAll('input:checked')].map(cb => cb.value);
+}
+function updateFilterBtn() {
+  const sel = getSelectedFilters();
+  if (sel.length === 0) { msBtnFilter.innerHTML = 'All'; }
+  else { msBtnFilter.innerHTML = sel.map(s => '<span class="ms-tag">' + s.replace('_',' ') + '</span>').join(' '); }
+}
+msDropFilter.querySelectorAll('input').forEach(cb => {
+  cb.addEventListener('change', () => { updateFilterBtn(); render(); });
+});
+
+function getFiltered() {
+  const sel = getSelectedFilters();
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const bmOnly = document.getElementById('fltBM').checked;
+  const cmOnly = document.getElementById('fltCM').checked;
+  const eeroOnly = document.getElementById('fltEero').checked;
+  return comparisonResults.filter(r => {
+    if (sel.length > 0) {
+      let match = false;
+      for (const s of sel) {
+        if (s === 'PASS' && r.overall === 'PASS') match = true;
+        else if (s === 'FAIL' && (r.overall === 'FAIL' || r.overall.includes('Missing'))) match = true;
+        else if (s === 'MPN_MISSING' && r.missingMPN) match = true;
+        else if (s === 'EXTRA_CM' && r.extraInCM) match = true;
+        else if (s === 'MISSING_CM' && r.overall === 'Missing in CM') match = true;
+        else if (s === 'MISSING_EERO' && r.overall === 'Not in eero BOM') match = true;
+      }
+      if (!match) return false;
+    }
+    if (q && !r.eeroPN.toLowerCase().includes(q)) return false;
+    if (bmOnly && !(r.checks && r.checks.bmInMatrix)) return false;
+    if (cmOnly && !(r.checks && r.checks.eeroMPN && r.cm && r.cm.vendorPN)) return false;
+    if (eeroOnly && !(r.checks && r.checks.eeroMPN)) return false;
+    return true;
+  });
+}
+
+function render() {
+  const filtered = getFiltered(), total = comparisonResults.length;
+  const pass = comparisonResults.filter(r => r.overall==='PASS').length;
+  const failTotal = total - pass;
+  const pct = n => total ? (n/total*100).toFixed(1) : 0;
+
+  // eero BOM stats
+  const eeroParts = mergedEero ? Object.keys(mergedEero).length : 0;
+  const eeroSources = mergedEero ? Object.values(mergedEero).reduce((a,e) => a + (e.sources?e.sources.length:0), 0) : 0;
+  // BM stats
+  let bmHtml = '';
+  if (bmData) {
+    const bmParts = Object.keys(bmData).length;
+    const bmEntries = Object.values(bmData).reduce((a,b) => a + b.length, 0);
+    bmHtml = `<div class="summary-group sg-bm">
+      <div class="sg-title">&#128203; Build Matrix</div>
+      <div class="sg-stats"><span class="sg-stat">${bmParts} <small>parts</small></span><span class="sg-stat">${bmEntries} <small>entries</small></span></div>
+    </div>`;
+  }
+  // CM BOM stats
+  const cmKey = activeCM;
+  const cmAoa = cmData[cmKey];
+  let cmPartsCount = 0, cmMPNCount = 0;
+  if (cmAoa) {
+    const seen = new Set();
+    const cols = detectCMCols(cmAoa);
+    for (let i = cols.headerRow+1; i < cmAoa.length; i++) {
+      const ep = cols.eeroPN >= 0 ? String(cmAoa[i][cols.eeroPN]??'').trim() : '';
+      const vpn = cols.vendorPN >= 0 ? String(cmAoa[i][cols.vendorPN]??'').trim() : '';
+      if (ep) seen.add(ep);
+      if (vpn) cmMPNCount++;
+    }
+    cmPartsCount = seen.size;
+  }
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-group sg-eero">
+      <div class="sg-title">&#128205; eero BOM</div>
+      <div class="sg-stats"><span class="sg-stat">${eeroParts} <small>parts</small></span><span class="sg-stat">${eeroSources} <small>MPNs</small></span></div>
+    </div>
+    ${bmHtml}
+    <div class="summary-group sg-cm">
+      <div class="sg-title">&#128230; CM BOM (${({luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn'})[activeCM]})</div>
+      <div class="sg-stats"><span class="sg-stat">${cmPartsCount} <small>parts</small></span><span class="sg-stat">${cmMPNCount} <small>MPNs</small></span></div>
+    </div>
+    <div class="summary-group sg-result">
+      <div class="sg-title">&#9989; Comparison Result</div>
+      <div class="sg-stats">
+        <span class="sg-stat">${total} <small>total</small></span>
+        <span class="sg-stat sg-pass">${pass} <small>PASS (${pct(pass)}%)</small></span>
+        <span class="sg-stat sg-fail">${failTotal} <small>FAIL (${pct(failTotal)}%)</small></span>
+      </div>
+    </div>`;
+  document.getElementById('showingText').textContent = `Showing ${filtered.length} of ${total}`;
+
+  const esc = s => String(s??'').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+  const pf = v => v ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>';
+  const pfLoc = v => v ? '<span class="pass">PASS</span>' : '<span class="fail">FAIL</span>';
+  const badge = s => {
+    if (s==='PASS') return '<span class="badge badge-match">PASS</span>';
+    if (s==='FAIL') return '<span class="badge badge-mismatch">FAIL</span>';
+    return '<span class="badge badge-missing">'+s+'</span>';
+  };
+
+  document.getElementById('tableBody').innerHTML = filtered.map(r => {
+    const ck = r.checks, e = r.eero||{}, c = r.cm||{};
+    const isMissing = r.overall.includes('Missing');
+    const hasBM = !!bmData;
+    const bmColSpan = hasBM ? 20 : 18;
+    if (isMissing) {
+      const missCM = r.overall === 'Missing in CM';
+      const bmCellsMiss = hasBM ? '<td></td><td></td>' : '';
+      const na = '<span class="fail">N/A</span>';
+      const mm = '<span class="fail">Mismatch</span>';
+      const cmPN = c.rawEeroPN || c.eeroPN || '';
+      const eeroFullPN = e.fullPN || r.eeroPN || '';
+      const pnMatchHtml = cmPN ? (norm(cmPN)===norm(eeroFullPN) || norm(cmPN)===norm(r.eeroPN) ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>') : na;
+      if (missCM && e) {
+        const srcMfr = e.sources && e.sources.length > 0 ? e.sources[0].mfr : '';
+        const srcMPN = e.sources && e.sources.length > 0 ? e.sources[0].mpn : '';
+        return `<tr>
+          <td>${r.idx}</td><td style="font-weight:600">${esc(r.eeroPN)}</td>
+          <td>${na}</td><td>${na}</td>
+          <td>${esc(e.revision||'')}</td><td>${na}</td><td>${mm}</td>
+          <td class="col-med">${esc(e.partName||'')}</td><td>${na}</td><td>${mm}</td>
+          <td>${esc(e.qty||'')}</td><td>${na}</td><td>${mm}</td>
+          <td>${srcMfr ? esc(srcMfr) : na}</td><td>${na}</td><td>${mm}</td>
+          <td>${srcMPN ? esc(srcMPN) : na}</td><td>${na}</td><td>${mm}</td>
+          <td>${na}</td><td></td><td>${na}</td><td>${na}</td><td>${mm}</td>
+          ${bmCellsMiss}
+          <td class="result-fail">Missing in CM</td>
+          <td><input type="text" class="comment-input" data-idx="${r.idx}" placeholder="..." value="${esc(r.comment||'')}"></td>
+        </tr>`;
+      } else if (!missCM && c) {
+        return `<tr>
+          <td>${r.idx}</td><td style="font-weight:600">${esc(r.eeroPN)}</td>
+          <td>${esc(cmPN)}</td><td>${pnMatchHtml}</td>
+          <td>${na}</td><td>${esc(c.rev||'')}</td><td>${mm}</td>
+          <td>${na}</td><td class="col-med">${esc(c.itemName||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.qty||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.vendor||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.vendorPN||'')}</td><td>${mm}</td>
+          <td>${na}</td><td></td><td>${na}</td><td>${esc(c.arenaStatus||'')}</td><td>${mm}</td>
+          ${bmCellsMiss}
+          <td class="result-fail">Not in eero BOM</td>
+          <td><input type="text" class="comment-input" data-idx="${r.idx}" placeholder="..." value="${esc(r.comment||'')}"></td>
+        </tr>`;
+      }
+    }
+    const bmCells = hasBM ? `
+      <td style="text-align:center">${ck.bmInMatrix ? '<span class="pass">✓</span>' : ''}</td>
+      <td style="text-align:center">${ck.bmResult==='PASS'?'<span class="pass">PASS</span>':ck.bmResult==='FAIL'?'<span class="fail">FAIL: '+esc(ck.bmDetail)+'</span>':'<span style="color:#999">—</span>'}</td>` : '';
+    const rv = (val, match) => { const s = esc(val||''); return !val ? '<span class="fail">N/A</span>' : (!match ? '<span class="fail">'+s+'</span>' : s); };
+    const cmPN = c.rawEeroPN || c.eeroPN || '';
+    const eeroFullPN = e.fullPN || r.eeroPN || '';
+    const pnMatch = cmPN ? (norm(cmPN)===norm(eeroFullPN) || norm(cmPN)===norm(r.eeroPN)) : null;
+    const pnMatchHtml = cmPN ? (pnMatch ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>') : '';
+    return `<tr>
+      <td>${r.idx}</td>
+      <td style="font-weight:600">${esc(r.eeroPN)}</td>
+      <td>${esc(cmPN)}</td>
+      <td>${pnMatchHtml}</td>
+      <td>${rv(ck.rev?.eero, ck.rev?.match)}</td><td>${rv(ck.rev?.cm, ck.rev?.match)}</td><td>${pf(ck.rev?.match)}</td>
+      <td class="col-med">${rv(ck.itemName?.eero, ck.itemName?.match)}</td><td class="col-med">${rv(ck.itemName?.cm, ck.itemName?.match)}</td><td>${pf(ck.itemName?.match)}</td>
+      <td>${rv(ck.qty?.eero, ck.qty?.match)}</td><td>${rv(ck.qty?.cm, ck.qty?.match)}</td><td>${pf(ck.qty?.match)}</td>
+      <td>${rv(ck.eeroMfr, ck.vendor?.match)}</td><td>${rv(c.vendor, ck.vendor?.match)}</td><td>${pf(ck.vendor?.match)}</td>
+      <td>${rv(ck.eeroMPN, ck.mpnInSources?.match)}</td><td>${rv(c.vendorPN, ck.mpnInSources?.match)}</td>
+      <td>${ck.mpnInSources?.match ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>'}</td>
+      <td>${pfLoc(ck.location?.match)}</td><td class="diff-detail">${esc(ck.location?.diff||'')}</td>
+      <td>${ck.status?.match ? esc(ck.status?.eero||'') : '<span class="fail">'+esc(ck.status?.eero||'N/A')+'</span>'}</td>
+      <td>${ck.status?.match ? esc(ck.status?.cm||'') : '<span class="fail">'+esc(ck.status?.cm||'N/A')+'</span>'}</td>
+      <td>${pf(ck.status?.match)}</td>
+      ${bmCells}
+      <td class="${r.overall==='PASS'?'result-pass':'result-fail'}">${r.overall}${r.missingMPN?' <span style="font-size:.45rem;color:#e65100">(MPN Missing in CM)</span>':''}${r.extraInCM?' <span style="font-size:.45rem;color:#1565c0">(Extra in CM)</span>':''}</td>
+      <td><input type="text" class="comment-input" data-idx="${r.idx}" placeholder="..." value="${esc(r.comment||'')}"></td>
+    </tr>`;
+  }).join('');
+
+  // Save comments on input
+  document.querySelectorAll('.comment-input').forEach(inp => {
+    inp.addEventListener('change', function() {
+      const i = parseInt(this.dataset.idx);
+      const r = comparisonResults.find(x => x.idx === i);
+      if (r) r.comment = this.value;
+    });
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', render);
+document.getElementById('fltBM').addEventListener('change', render);
+document.getElementById('fltCM').addEventListener('change', render);
+document.getElementById('fltEero').addEventListener('change', render);
+
+// Export dialog
+function showExportDialog(callback) {
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;padding:1.5rem;min-width:340px;box-shadow:0 8px 30px rgba(0,0,0,.2);';
+  const fieldStyle = 'width:100%;padding:.35rem .6rem;border:1px solid #ccc;border-radius:6px;font-size:.8rem;margin-bottom:.6rem;';
+  const lblStyle = 'font-size:.75rem;font-weight:600;color:#555;display:block;margin-bottom:.2rem;';
+  box.innerHTML = `
+    <div style="font-weight:700;font-size:.95rem;margin-bottom:1rem;color:#1a1a2e;">📥 Export Report</div>
+    <label style="${lblStyle}">Product</label>
+    <input type="text" id="dlgProduct" style="${fieldStyle}" placeholder="e.g. Dejavu P1">
+    <label style="${lblStyle}">Phase</label>
+    <input type="text" id="dlgPhase" style="${fieldStyle}" placeholder="e.g. DVT, PVT">
+    <label style="${lblStyle}">Config</label>
+    <input type="text" id="dlgConfig" style="${fieldStyle}" placeholder="e.g. MLB">
+    <label style="${lblStyle}">Checked by</label>
+    <input type="text" id="dlgChecker" style="${fieldStyle}" placeholder="Enter your name...">
+    <div style="font-size:.7rem;color:#888;margin-bottom:.8rem;">File name: <span id="dlgPreview" style="color:#5c6bc0;font-weight:600;"></span></div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;">
+      <button id="dlgCancel" style="padding:.4rem 1rem;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer;font-size:.8rem;">Cancel</button>
+      <button id="dlgOk" style="padding:.4rem 1.2rem;border:none;border-radius:6px;background:#5c6bc0;color:#fff;cursor:pointer;font-size:.8rem;font-weight:600;">Export</button>
+    </div>`;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const updatePreview = () => {
+    const parts = [box.querySelector('#dlgProduct').value.trim(), box.querySelector('#dlgPhase').value.trim(), box.querySelector('#dlgConfig').value.trim(), 'SMT_BOM_Compare', cmName, date].filter(Boolean);
+    box.querySelector('#dlgPreview').textContent = parts.join('_');
+  };
+  ['dlgProduct','dlgPhase','dlgConfig'].forEach(id => box.querySelector('#'+id).addEventListener('input', updatePreview));
+  updatePreview();
+  box.querySelector('#dlgProduct').focus();
+
+  box.querySelector('#dlgCancel').onclick = () => { document.body.removeChild(overlay); };
+  box.querySelector('#dlgOk').onclick = () => {
+    const product = box.querySelector('#dlgProduct').value.trim();
+    const phase = box.querySelector('#dlgPhase').value.trim();
+    const config = box.querySelector('#dlgConfig').value.trim();
+    const checker = box.querySelector('#dlgChecker').value.trim();
+    const parts = [product, phase, config, 'SMT_BOM_Compare', cmName, date].filter(Boolean);
+    const fileName = parts.join('_');
+    document.body.removeChild(overlay);
+    callback(fileName, checker, { product, phase, config });
+  };
+}
+
+// Export Excel with ExcelJS (proper .xlsx with colors)
+async function exportExcelJS(fileName, checker, meta) {
+  const filtered = getFiltered();
+  const hasBM = !!bmData;
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('BOM Compare');
+
+  // Styles
+  const hdrEero = { font:{bold:true,size:7,color:{argb:'FF1565C0'}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFE3F2FD'}}, border:{bottom:{style:'thin'},right:{style:'thin'}}, alignment:{horizontal:'left'} };
+  const hdrCM = { font:{bold:true,size:7,color:{argb:'FFC62828'}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFFCE4EC'}}, border:{bottom:{style:'thin'},right:{style:'thin'}}, alignment:{horizontal:'left'} };
+  const hdrResult = { font:{bold:true,size:7,color:{argb:'FF6A1B9A'}}, fill:{type:'pattern',pattern:'solid',fgColor:{argb:'FFF3E5F5'}}, border:{bottom:{style:'thin'},right:{style:'thin'}}, alignment:{horizontal:'left'} };
+  const passFont = { color:{argb:'FF388E3C'}, bold:true, size:8 };
+  const failFont = { color:{argb:'FFC62828'}, bold:true, size:8 };
+  const normalFont = { size:8 };
+  const passBg = { type:'pattern',pattern:'solid',fgColor:{argb:'FFE8F5E9'} };
+  const failBg = { type:'pattern',pattern:'solid',fgColor:{argb:'FFFFEBEE'} };
+
+  // Meta row
+  const metaParts = ['CM: '+cmName, 'Date: '+date];
+  if (meta.product) metaParts.unshift('Product: '+meta.product);
+  if (meta.phase) metaParts.push('Phase: '+meta.phase);
+  if (meta.config) metaParts.push('Config: '+meta.config);
+  if (checker) metaParts.push('Checked by: '+checker);
+  metaParts.push('eero — PQE');
+  const metaRow = ws.addRow([fileName + ' | ' + metaParts.join(' | ')]);
+  metaRow.font = { bold:true, size:9 };
+  ws.addRow([]);
+
+  // Headers
+  const h = ['#','eero P/N','CM Part No','PN Match','eero Rev','CM Rev','Rev','eero Item Name','CM Item Name','Item Name','eero Qty','CM Qty','Qty','eero Mfr','CM Vendor','Vendor','eero MPN','CM MPN','MPN','Location','Loc Diff','eero Status','CM Status','Status'];
+  if (hasBM) h.push('BM','BM Result');
+  h.push('Comparison Result','eero Comment');
+  const hdrRow = ws.addRow(h);
+  // Style headers
+  const hdrTypes = ['r','e','c','r','e','c','r','e','c','r','e','c','r','e','c','r','e','c','r','r','r','e','c','r'];
+  if (hasBM) hdrTypes.push('r','r');
+  hdrTypes.push('r','r');
+  hdrRow.eachCell((cell, colNum) => {
+    const t = hdrTypes[colNum-1];
+    if (t==='e') Object.assign(cell, {style:{...hdrEero}});
+    else if (t==='c') Object.assign(cell, {style:{...hdrCM}});
+    else Object.assign(cell, {style:{...hdrResult}});
+  });
+
+  // Data rows
+  for (const r of filtered) {
+    const ck = r.checks||{}, c = r.cm||{}, e = r.eero||{};
+    let rowData, rowStyles;
+
+    if (r.overall.includes('Missing') || r.overall === 'Not in eero BOM') {
+      const missCM = r.overall === 'Missing in CM';
+      const cmPN = c.rawEeroPN||c.eeroPN||'';
+      const pnM = cmPN ? (((norm(cmPN)===norm(r.eeroPN)||norm(cmPN)===norm((r.eero||{}).fullPN||''))?'Match':'Mismatch')) : 'N/A';
+      if (missCM && e) {
+        const srcMfr = e.sources&&e.sources.length>0?e.sources[0].mfr:'N/A';
+        const srcMPN = e.sources&&e.sources.length>0?e.sources[0].mpn:'N/A';
+        rowData = [r.idx,r.eeroPN,'N/A','N/A',e.revision||'','N/A','Mismatch',e.partName||'','N/A','Mismatch',e.qty||'','N/A','Mismatch',srcMfr,'N/A','Mismatch',srcMPN,'N/A','Mismatch','N/A','','N/A','N/A','Mismatch'];
+      } else {
+        rowData = [r.idx,r.eeroPN,cmPN,pnM,'N/A',c.rev||'','Mismatch','N/A',c.itemName||'','Mismatch','N/A',c.qty||'','Mismatch','N/A',c.vendor||'','Mismatch','N/A',c.vendorPN||'','Mismatch','N/A','','N/A',c.arenaStatus||'','Mismatch'];
+      }
+      if (hasBM) rowData.push('','');
+      rowData.push(r.overall === 'Not in eero BOM' ? 'Not in eero BOM' : 'FAIL', r.comment||'');
+    } else {
+      const cmPN = c.rawEeroPN||c.eeroPN||'';
+      const pnM = cmPN ? (((norm(cmPN)===norm(r.eeroPN)||norm(cmPN)===norm((r.eero||{}).fullPN||''))?'Match':'Mismatch')) : '';
+      rowData = [r.idx,r.eeroPN,cmPN,pnM,
+        ck.rev?.eero||'',ck.rev?.cm||'',ck.rev?.match?'Match':'Mismatch',
+        ck.itemName?.eero||'',ck.itemName?.cm||'',ck.itemName?.match?'Match':'Mismatch',
+        ck.qty?.eero||'',ck.qty?.cm||'',ck.qty?.match?'Match':'Mismatch',
+        ck.eeroMfr||'',c.vendor||'',ck.vendor?.match?'Match':'Mismatch',
+        ck.eeroMPN||'',c.vendorPN||'',ck.mpnInSources?.match?'Match':'Mismatch',
+        ck.location?.match?'PASS':'FAIL',ck.location?.diff||'',
+        ck.status?.eero||'',c.arenaStatus||'',ck.status?.match?'Match':'Mismatch'];
+      if (hasBM) rowData.push(ck.bmInMatrix?'✓':'',ck.bmResult==='FAIL'?'FAIL: '+(ck.bmDetail||''):(ck.bmResult||'—'));
+      const result = r.overall + (r.missingMPN?' (MPN Missing in CM)':'') + (r.extraInCM?' (Extra in CM)':'');
+      rowData.push(result, r.comment||'');
+    }
+
+    const row = ws.addRow(rowData);
+    row.eachCell((cell, colNum) => {
+      cell.font = normalFont;
+      const val = String(cell.value||'');
+      if (val === 'Mismatch' || val === 'FAIL' || val === 'N/A') { cell.font = failFont; }
+      if (val === 'Match' || val === 'PASS' || val === 'Approved') { cell.font = passFont; }
+      if (val.startsWith('FAIL')) { cell.font = failFont; cell.fill = failBg; }
+      if (val === 'PASS' && colNum === rowData.length - 1) { cell.font = passFont; cell.fill = passBg; }
+    });
+    // Style Comparison Result column
+    const resultCol = rowData.length - 1;
+    const resultCell = row.getCell(resultCol);
+    if (String(resultCell.value||'').includes('FAIL')) { resultCell.font = failFont; resultCell.fill = failBg; }
+    else if (resultCell.value === 'PASS') { resultCell.font = passFont; resultCell.fill = passBg; }
+  }
+
+  // Auto-width columns
+  ws.columns.forEach(col => { col.width = 14; });
+  ws.getColumn(1).width = 5;
+  ws.getColumn(6).width = 22; ws.getColumn(7).width = 22;
+  ws.getColumn(15).width = 22; ws.getColumn(16).width = 22;
+  ws.getColumn(19).width = 25;
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = fileName + '.xlsx'; a.click();
+}
+
+document.getElementById('btnExport').addEventListener('click', () => {
+  showExportDialog((fileName, checker, meta) => { exportExcelJS(fileName, checker, meta); });
+});
+
+// Export CSV
+document.getElementById('btnExportCSV').addEventListener('click', () => {
+  showExportDialog((fileName, checker, meta) => {
+  const filtered = getFiltered();
+  const hasBM = !!bmData;
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
+  const h = ['#','eero P/N','CM Part No','PN Match','eero Rev','CM Rev','Rev Result','eero Item Name','CM Item Name','Item Name Result',
+    'eero Qty','CM Qty','Qty Result','eero Mfr','CM Vendor','Vendor Result','eero MPN','CM MPN','MPN Result',
+    'Location','Location Diff','eero Status','CM Status','Status Result'];
+  if (hasBM) h.push('Build Matrix','BM Result');
+  h.push('Comparison Result','eero Comment');
+  const rows = filtered.map(r => {
+    const ck=r.checks, e=r.eero||{}, c=r.cm||{};
+    const cmPN = c.rawEeroPN||c.eeroPN||'';
+    const pnM = cmPN ? (((norm(cmPN)===norm(r.eeroPN)||norm(cmPN)===norm((r.eero||{}).fullPN||''))?'Match':'Mismatch')) : 'N/A';
+    if (r.overall.includes('Missing') || r.overall === 'Not in eero BOM') {
+      const missCM = r.overall === 'Missing in CM';
+      if (missCM && e) {
+        const srcMfr = e.sources && e.sources.length > 0 ? e.sources[0].mfr : '';
+        const srcMPN = e.sources && e.sources.length > 0 ? e.sources[0].mpn : '';
+        const row = [r.idx, r.eeroPN, 'N/A','N/A', e.revision||'','N/A','Mismatch', e.partName||'','N/A','Mismatch', e.qty||'','N/A','Mismatch',
+          srcMfr||'N/A','N/A','Mismatch', srcMPN||'N/A','N/A','Mismatch', 'N/A','','N/A','N/A','Mismatch'];
+        if (hasBM) row.push('','');
+        row.push(r.overall, r.comment||''); return row;
+      } else {
+        const row = [r.idx, r.eeroPN, cmPN, pnM, 'N/A',c.rev||'','Mismatch', 'N/A',c.itemName||'','Mismatch', 'N/A',c.qty||'','Mismatch',
+          'N/A',c.vendor||'','Mismatch', 'N/A',c.vendorPN||'','Mismatch', 'N/A','','N/A',c.arenaStatus||'','Mismatch'];
+        if (hasBM) row.push('','');
+        row.push(r.overall, r.comment||''); return row;
+      }
+    }
+    const row = [r.idx, r.eeroPN, cmPN, pnM,
+      ck.rev?.eero, ck.rev?.cm, ck.rev?.match?'Match':'Mismatch',
+      ck.itemName?.eero, ck.itemName?.cm, ck.itemName?.match?'Match':'Mismatch',
+      ck.qty?.eero, ck.qty?.cm, ck.qty?.match?'Match':'Mismatch',
+      ck.eeroMfr||'', c.vendor, ck.vendor?.match?'Match':'Mismatch',
+      ck.eeroMPN||'', c.vendorPN, ck.mpnInSources?.match?'Match':'Mismatch',
+      ck.location?.match?'PASS':'FAIL', ck.location?.diff||'',
+      ck.status?.eero||'', c.arenaStatus||'', ck.status?.match?'Match':'Mismatch'];
+    if (hasBM) row.push(ck.bmInMatrix?'✓':'', ck.bmResult==='FAIL'?'FAIL: '+(ck.bmDetail||''):(ck.bmResult||'—'));
+    row.push(r.overall, r.comment||'');
+    return row;
+  });
+  const metaParts = ['CM: ' + cmName, 'Date: ' + date];
+  if (meta.product) metaParts.unshift('Product: ' + meta.product);
+  if (meta.phase) metaParts.push('Phase: ' + meta.phase);
+  if (meta.config) metaParts.push('Config: ' + meta.config);
+  if (checker) metaParts.push('Checked by: ' + checker);
+  metaParts.push('eero — PQE');
+  const metaLine = `"${metaParts.join(' | ')}"`;
+  const csv = [metaLine, h.map(c=>`"${c}"`).join(','), ...rows.map(r => r.map(c => `"${String(c??'').replace(/"/g,'""')}"`).join(','))].join('\n');
+  const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = fileName + '.csv'; a.click();
+  });
+});
+
+// Export PDF
+document.getElementById('btnExportPDF').addEventListener('click', () => {
+  showExportDialog((fileName, checker, meta) => {
+  const filtered = getFiltered();
+  const hasBM = !!bmData;
+  const cmName = {luxshare:'Luxshare',pegatron:'Pegatron',ambit:'Foxconn (Ambit)'}[activeCM]||activeCM;
+  const date = new Date().toISOString().slice(0,10);
+
+  const w = window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${fileName} — ${cmName} — ${date}</title>
+<style>
+  @page { size: landscape; margin: 8mm; }
+  body { font-family: Arial, sans-serif; font-size: 7pt; color: #333; }
+  h2 { font-size: 11pt; margin: 0 0 4px; }
+  .meta { font-size: 8pt; color: #666; margin-bottom: 6px; }
+  .summary { display: flex; gap: 10px; margin-bottom: 6px; }
+  .sb { padding: 4px 10px; border-radius: 4px; color: #fff; font-weight: 700; font-size: 8pt; }
+  .sb-t { background: #3f51b5; } .sb-p { background: #388e3c; } .sb-f { background: #e65100; } .sb-m { background: #c62828; }
+  table { width: 100%; border-collapse: collapse; font-size: 6.5pt; }
+  th { background: #eee; padding: 2px 3px; border: 1px solid #ccc; text-align: left; white-space: nowrap; font-size: 6pt; }
+  th.he { background: #e3f2fd; color: #1565c0; }
+  th.hc { background: #fce4ec; color: #c62828; }
+  th.hr { background: #f3e5f5; color: #6a1b9a; }
+  td { padding: 2px 3px; border: 1px solid #ddd; word-break: break-word; max-width: 100px; }
+  .pass { color: #388e3c; font-weight: 700; } .fail { color: #c62828; font-weight: 700; }
+  .rp { background: #e8f5e9; text-align: center; font-weight: 700; color: #2e7d32; }
+  .rf { background: #ffebee; text-align: center; font-weight: 700; color: #c62828; }
+  .na { color: #999; }
+  .miss { color: #c62828; font-weight: 600; }
+</style></head><body>
+<h2>${fileName}</h2>
+<div class="meta">${meta.product?'Product: '+meta.product+' &nbsp;|&nbsp; ':''}CM: ${cmName} &nbsp;|&nbsp; Date: ${date}${meta.phase?' &nbsp;|&nbsp; Phase: '+meta.phase:''}${meta.config?' &nbsp;|&nbsp; Config: '+meta.config:''}${checker?' &nbsp;|&nbsp; Checked by: '+checker:''} &nbsp;|&nbsp; eero — PQE</div>`);
+
+  const total = comparisonResults.length;
+  const pass = comparisonResults.filter(r=>r.overall==='PASS').length;
+  const failTotal = total - pass;
+  w.document.write(`<div class="summary">
+    <span class="sb sb-t">Total: ${total}</span>
+    <span class="sb sb-p">PASS: ${pass}</span>
+    <span class="sb sb-f">FAIL: ${failTotal}</span>
+  </div><table><thead><tr>
+    <th>#</th><th class="he">eero P/N</th>
+    <th class="hc">CM Part No</th><th class="hr">PN Match</th>
+    <th class="he">eero Rev</th><th class="hc">CM Rev</th><th class="hr">Rev</th>
+    <th class="he">eero Item Name</th><th class="hc">CM Item Name</th><th class="hr">Item Name</th>
+    <th class="he">eero Qty</th><th class="hc">CM Qty</th><th class="hr">Qty</th>
+    <th class="he">eero Mfr</th><th class="hc">CM Vendor</th><th class="hr">Vendor</th>
+    <th class="he">eero MPN</th><th class="hc">CM MPN</th><th class="hr">MPN</th>
+    <th class="hr">Location</th><th class="hr">Loc Diff</th>
+    <th class="he">eero Status</th><th class="hc">CM Status</th><th class="hr">Status</th>
+    ${hasBM?'<th class="hr">BM</th><th class="hr">BM Result</th>':''}
+    <th class="hr">Comparison Result</th>
+    <th class="hr">eero Comment</th>
+  </tr></thead><tbody>`);
+
+  const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const pf = v => v ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>';
+
+  for (const r of filtered) {
+    const ck = r.checks, c = r.cm || {};
+    const cmPN = c.rawEeroPN||c.eeroPN||'';
+    const pnM = cmPN ? ((norm(cmPN)===norm(r.eeroPN)||norm(cmPN)===norm((r.eero||{}).fullPN||''))?'<span class="pass">Match</span>':'<span class="fail">Mismatch</span>') : '<span class="fail">N/A</span>';
+    if (r.overall.includes('Missing') || r.overall === 'Not in eero BOM') {
+      const missCM = r.overall === 'Missing in CM';
+      const e = r.eero || {}, bmM = hasBM ? '<td></td><td></td>' : '';
+      const na = '<span class="fail">N/A</span>', mm = '<span class="fail">Mismatch</span>';
+      if (missCM && r.eero) {
+        const srcMfr = e.sources && e.sources.length > 0 ? e.sources[0].mfr : '';
+        const srcMPN = e.sources && e.sources.length > 0 ? e.sources[0].mpn : '';
+        w.document.write(`<tr><td>${r.idx}</td><td>${esc(r.eeroPN)}</td>
+          <td>${na}</td><td>${na}</td>
+          <td>${esc(e.revision||'')}</td><td>${na}</td><td>${mm}</td>
+          <td>${esc(e.partName||'')}</td><td>${na}</td><td>${mm}</td>
+          <td>${esc(e.qty||'')}</td><td>${na}</td><td>${mm}</td>
+          <td>${srcMfr?esc(srcMfr):na}</td><td>${na}</td><td>${mm}</td>
+          <td>${srcMPN?esc(srcMPN):na}</td><td>${na}</td><td>${mm}</td>
+          <td>${na}</td><td></td><td>${na}</td><td>${na}</td><td>${mm}</td>${bmM}
+          <td class="rf">Missing in CM</td><td>${esc(r.comment||'')}</td></tr>`);
+      } else {
+        w.document.write(`<tr><td>${r.idx}</td><td>${esc(r.eeroPN)}</td>
+          <td>${esc(cmPN)}</td><td>${pnM}</td>
+          <td>${na}</td><td>${esc(c.rev||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.itemName||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.qty||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.vendor||'')}</td><td>${mm}</td>
+          <td>${na}</td><td>${esc(c.vendorPN||'')}</td><td>${mm}</td>
+          <td>${na}</td><td></td><td>${na}</td><td>${esc(c.arenaStatus||'')}</td><td>${mm}</td>${bmM}
+          <td class="rf">Not in eero BOM</td><td>${esc(r.comment||'')}</td></tr>`);
+      }
+      continue;
+    }
+    const vendorR = ck.vendor?.na ? '<span class="fail">Mismatch</span>' : pf(ck.vendor?.match);
+    const mpnR = (!ck.eeroMPN || !c.vendorPN) ? '<span class="fail">Mismatch</span>' : (ck.mpnInSources?.match ? '<span class="pass">Match</span>' : '<span class="fail">Mismatch</span>');
+    const bmCells = hasBM ? `<td style="text-align:center">${ck.bmInMatrix?'✓':''}</td><td style="text-align:center">${ck.bmResult==='PASS'?'<span class="pass">PASS</span>':ck.bmResult==='FAIL'?'<span class="fail">FAIL: '+esc(ck.bmDetail)+'</span>':'<span class="na">—</span>'}</td>` : '';
+    w.document.write(`<tr>
+      <td>${r.idx}</td><td>${esc(r.eeroPN)}</td>
+      <td>${esc(cmPN)}</td><td>${pnM}</td>
+      <td>${ck.rev?.match?esc(ck.rev?.eero):'<span class="fail">'+esc(ck.rev?.eero||'N/A')+'</span>'}</td><td>${ck.rev?.match?esc(ck.rev?.cm):'<span class="fail">'+esc(ck.rev?.cm||'N/A')+'</span>'}</td><td>${pf(ck.rev?.match)}</td>
+      <td>${ck.itemName?.match?esc(ck.itemName?.eero):'<span class="fail">'+esc(ck.itemName?.eero||'N/A')+'</span>'}</td><td>${ck.itemName?.match?esc(ck.itemName?.cm):'<span class="fail">'+esc(ck.itemName?.cm||'N/A')+'</span>'}</td><td>${pf(ck.itemName?.match)}</td>
+      <td>${ck.qty?.match?esc(ck.qty?.eero):'<span class="fail">'+esc(ck.qty?.eero||'N/A')+'</span>'}</td><td>${ck.qty?.match?esc(ck.qty?.cm):'<span class="fail">'+esc(ck.qty?.cm||'N/A')+'</span>'}</td><td>${pf(ck.qty?.match)}</td>
+      <td>${ck.vendor?.match?esc(ck.eeroMfr):'<span class="fail">'+esc(ck.eeroMfr||'N/A')+'</span>'}</td><td>${ck.vendor?.match?esc(c.vendor):'<span class="fail">'+esc(c.vendor||'N/A')+'</span>'}</td><td>${vendorR}</td>
+      <td>${ck.mpnInSources?.match?esc(ck.eeroMPN):'<span class="fail">'+esc(ck.eeroMPN||'N/A')+'</span>'}</td><td>${ck.mpnInSources?.match?esc(c.vendorPN):'<span class="fail">'+esc(c.vendorPN||'N/A')+'</span>'}</td><td>${mpnR}</td>
+      <td>${ck.location?.match?'<span class="pass">PASS</span>':'<span class="fail">FAIL</span>'}</td>
+      <td style="font-size:5.5pt;color:#e65100">${esc(ck.location?.diff||'')}</td>
+      <td>${ck.status?.match?esc(ck.status?.eero||''):'<span class="fail">'+esc(ck.status?.eero||'N/A')+'</span>'}</td>
+      <td>${ck.status?.match?esc(ck.status?.cm||''):'<span class="fail">'+esc(ck.status?.cm||'N/A')+'</span>'}</td>
+      <td>${pf(ck.status?.match)}</td>
+      ${bmCells}
+      <td class="${r.overall==='PASS'?'rp':'rf'}">${r.overall}${r.missingMPN?' (MPN Missing in CM)':''}${r.extraInCM?' (Extra in CM)':''}</td>
+      <td>${esc(r.comment||'')}</td>
+    </tr>`);
+  }
+
+  w.document.write('</tbody></table></body></html>');
+  w.document.close();
+  setTimeout(() => { w.print(); }, 500);
+  });
+});
+
+</script>
+</body>
+</html>
